@@ -236,3 +236,31 @@ def test_vision_failures_become_unavailable(monkeypatch, make):
     _provider(monkeypatch, lambda request: make(httpx))
     with pytest.raises(VisionUnavailable):
         vision.transcribe(JPEG, "image/jpeg")
+
+
+# ── hackathon switch: accept everything ──────────────────
+
+def test_auto_accept_verifies_anything_valid(user, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
+    fake_ai(monkeypatch, card(is_ration_card=False))
+    p = upload(user).json()["profile"]
+    assert p["proof_status"] == "verified"
+    assert p["proof_result"]["auto_accepted"] is True
+    assert p["proof_result"]["ai_status"] == "needs_review"      # the real outcome is kept
+    assert p["proof_result"]["reason"] == "NOT_A_RATION_CARD"
+
+
+def test_auto_accept_covers_ai_down_and_pdf(user, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
+    assert upload(user).json()["profile"]["proof_status"] == "verified"      # no AI configured
+    pdf = upload(user, b"%PDF-1.4 " + b"0" * 100, "c.pdf", "application/pdf")
+    assert pdf.json()["profile"]["proof_status"] == "verified"
+
+
+def test_auto_accept_still_refuses_bad_files(user, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
+    assert upload(user, b"MZ\x90\x00 not an image", "card.jpg", "image/jpeg").status_code == 422
+    assert upload(user, b"").status_code == 422

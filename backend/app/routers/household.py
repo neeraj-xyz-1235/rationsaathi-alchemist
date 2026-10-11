@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import rate_limit as rl
 from app.auth.deps import current_user
 from app.auth.sessions import as_utc, now
+from app.config import settings
 from app.db import models as m
 from app.db.session import get_db
 from app.proof import verify
@@ -142,6 +143,9 @@ async def upload_proof(file: UploadFile = File(...), document_type: str = Form("
         status = "needs_review"
         result = {**result, "reason": "DUPLICATE_PROOF"}
 
+    if settings.PROOF_AUTO_ACCEPT and status != "verified":
+        result = {**result, "ai_status": status, "auto_accepted": True}
+        status = "verified"
     h.proof_status, h.proof_result, h.proof_sha256 = status, result, digest
     h.updated_at = now()
     db.commit()                                # only the result and a hash are kept, never the file

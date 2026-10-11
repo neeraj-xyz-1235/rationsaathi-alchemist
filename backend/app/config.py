@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Empty = no AI check; every proof then waits for manual review.
     LLM_VISION_MODEL: str = ""
     VISION_TIMEOUT_S: float = 30.0
+    PROOF_AUTO_ACCEPT: bool = True
     APP_ORIGIN: str = "http://localhost:5173"      # several allowed: comma separated
     COOKIE_SECURE: bool = False
     ENABLE_DOCS: bool = True
