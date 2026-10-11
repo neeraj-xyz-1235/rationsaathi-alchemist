@@ -50,6 +50,7 @@ export const recordSchema = z.object({
     note: z.string().max(500, 'Keep the note under 500 characters.').nullable(),
     no_receipt: z.boolean(),
     receipt_text: z.string().max(2000).nullable(),
+    proof_photo: z.boolean().optional(),
   }),
 }).superRefine((r, ctx) => {
   if (r.status === 'confirmed') {

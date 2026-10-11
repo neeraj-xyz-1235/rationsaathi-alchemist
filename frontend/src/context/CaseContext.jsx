@@ -5,6 +5,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from './AuthContext.jsx'
 import { currentMonthPeriod } from '../features/format.js'
+import { clearProofs } from '../features/scan/proofStore.js'
 
 const CaseContext = createContext(null)
 const KEY = 'rationsaathi.draft.v1'
@@ -58,6 +59,7 @@ export function CaseProvider({ children }) {
     setResult(null)
     setReportId(null)
     clearDraft()
+    clearProofs().catch(() => {}) // receipt photos live on this device only; people share phones
   }, [])
 
   /** Load a saved case from the server into the editor. */

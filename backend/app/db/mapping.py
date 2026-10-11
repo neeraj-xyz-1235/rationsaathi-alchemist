@@ -42,7 +42,8 @@ def insert_rules_and_records(db: Session, case_id: uuid.UUID, case: Case) -> Non
             case_id=case_id, id=rec.id, position=i, rule_id=rec.rule_id, item=rec.item,
             qty_base=base, unit=unit, received_on=rec.date, status=rec.status,
             entry_method=rec.entry_method, receipt_ref=e.receipt_ref, note=e.note,
-            no_receipt=e.no_receipt, receipt_text=e.receipt_text))
+            no_receipt=e.no_receipt, receipt_text=e.receipt_text,
+            extraction={"proof_photo": True} if e.proof_photo else None))
     db.flush()
 
 
@@ -75,6 +76,7 @@ def to_schema(db: Session, row: m.Case) -> Case:
                       if r.qty_base is not None else None),
             date=r.received_on, status=r.status, entry_method=r.entry_method,
             evidence=Evidence(receipt_ref=r.receipt_ref, note=r.note,
-                              no_receipt=r.no_receipt, receipt_text=r.receipt_text),
+                              no_receipt=r.no_receipt, receipt_text=r.receipt_text,
+                              proof_photo=bool((r.extraction or {}).get("proof_photo"))),
         ) for r in records],
     )

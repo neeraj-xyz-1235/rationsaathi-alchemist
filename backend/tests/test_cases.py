@@ -73,12 +73,12 @@ def test_pending_record_without_quantity_and_unknown_date(alice, demo):
     demo["records"].append({"id": "p1", "rule_id": "r-rice", "item": "Rice", "quantity": None,
                             "date": None, "status": "pending", "entry_method": "manual",
                             "evidence": {"receipt_ref": None, "note": None, "no_receipt": False,
-                                         "receipt_text": "Rice ?? kg"}})
+                                         "receipt_text": "Rice ?? kg", "proof_photo": False}})
     demo["records"].append({"id": "u1", "rule_id": None, "item": "Sugar",
                             "quantity": {"value": "1", "unit": "kg"}, "date": "2026-09-12",
                             "status": "confirmed", "entry_method": "manual",
                             "evidence": {"receipt_ref": None, "note": None, "no_receipt": False,
-                                         "receipt_text": None}})
+                                         "receipt_text": None, "proof_photo": False}})
     got = alice.get(f"/api/cases/{save(alice, demo)}").json()
     assert got == demo
     assert got["records"][3]["evidence"]["receipt_text"] == "Rice ?? kg"   # verbatim

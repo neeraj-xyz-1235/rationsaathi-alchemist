@@ -46,6 +46,7 @@ class Evidence(Strict):
     note: str | None = Field(None, max_length=500)
     no_receipt: bool = False
     receipt_text: str | None = Field(None, max_length=2000)
+    proof_photo: bool = False  # a receipt photo is held by the household; the image itself is never uploaded
 
 
 class Rule(Strict):
@@ -170,6 +171,7 @@ class EvidenceSummary(BaseModel):
     records: int
     with_receipt_ref: int
     with_receipt_text: int
+    with_proof_photo: int
     no_receipt: int
     no_evidence: int
 

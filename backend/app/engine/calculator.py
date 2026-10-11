@@ -8,13 +8,14 @@ from .units import from_base, to_base
 
 def _evidence_summary(records) -> dict:
     s = {"records": len(records), "with_receipt_ref": 0, "with_receipt_text": 0,
-         "no_receipt": 0, "no_evidence": 0}
+         "with_proof_photo": 0, "no_receipt": 0, "no_evidence": 0}
     for r in records:
         e = r.evidence
         s["with_receipt_ref"] += bool(e.receipt_ref)
         s["with_receipt_text"] += bool(e.receipt_text)
+        s["with_proof_photo"] += bool(e.proof_photo)
         s["no_receipt"] += bool(e.no_receipt)
-        if not (e.receipt_ref or e.receipt_text or e.note or e.no_receipt):
+        if not (e.receipt_ref or e.receipt_text or e.note or e.no_receipt or e.proof_photo):
             s["no_evidence"] += 1
     return s
 

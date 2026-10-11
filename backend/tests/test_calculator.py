@@ -36,7 +36,8 @@ def test_demo_case(demo):
     assert res["period"]["status"] == "ended"
     assert res["unmatched"] == []
     assert res["evidence_summary"] == {"records": 3, "with_receipt_ref": 2,
-                                       "with_receipt_text": 1, "no_receipt": 1,
+                                       "with_receipt_text": 1, "with_proof_photo": 0,
+                                       "no_receipt": 1,
                                        "no_evidence": 0}
 
 
@@ -158,6 +159,15 @@ def test_no_evidence_counted():
     assert run(make_case([rice_rule()], [rec]))["evidence_summary"]["no_evidence"] == 1
 
 
+def test_proof_photo_counts_as_evidence():
+    rec = make_record("a", "r", "1", "kg", "2026-09-02",
+                      evidence={"receipt_ref": None, "note": None, "no_receipt": False,
+                                "receipt_text": None, "proof_photo": True})
+    summary = run(make_case([rice_rule()], [rec]))["evidence_summary"]
+    assert summary["with_proof_photo"] == 1
+    assert summary["no_evidence"] == 0
+
+
 # ── validation (never rounded, never guessed) ────────────
 
 def test_too_precise_quantity_rejected():
@@ -198,3 +208,4 @@ def test_no_floats_in_engine():
     import pathlib
     for f in pathlib.Path("app/engine").glob("*.py"):
         assert "float(" not in f.read_text("utf-8"), f
+

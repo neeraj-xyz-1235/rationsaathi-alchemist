@@ -65,6 +65,7 @@ export const REPORT_FOOTER =
 export function evidenceText(rec) {
   const e = rec.evidence || {}
   const parts = []
+  if (e.proof_photo) parts.push('Receipt photo attached')
   if (e.receipt_ref) parts.push(`Receipt ${e.receipt_ref}`)
   if (e.receipt_text) parts.push(`Pasted text: “${e.receipt_text}”`)
   if (e.note) parts.push(e.note)

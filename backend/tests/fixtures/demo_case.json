@@ -13,15 +13,15 @@
       "quantity": { "value": "8", "unit": "kg" }, "date": "2026-09-03",
       "status": "confirmed", "entry_method": "extracted_confirmed",
       "evidence": { "receipt_ref": "101", "note": null, "no_receipt": false,
-                    "receipt_text": "Rice 8kg recvd 03/09 Rcpt#101" } },
+                    "receipt_text": "Rice 8kg recvd 03/09 Rcpt#101", "proof_photo": false } },
     { "id": "d2", "rule_id": "r-rice", "item": "Rice",
       "quantity": { "value": "6", "unit": "kg" }, "date": "2026-09-20",
       "status": "confirmed", "entry_method": "manual",
-      "evidence": { "receipt_ref": "145", "note": null, "no_receipt": false, "receipt_text": null } },
+      "evidence": { "receipt_ref": "145", "note": null, "no_receipt": false, "receipt_text": null, "proof_photo": false } },
     { "id": "d3", "rule_id": "r-wheat", "item": "Wheat",
       "quantity": { "value": "10", "unit": "kg" }, "date": "2026-09-05",
       "status": "confirmed", "entry_method": "manual",
       "evidence": { "receipt_ref": null, "note": "Collected at shop", "no_receipt": true,
-                    "receipt_text": null } }
+                    "receipt_text": null, "proof_photo": false } }
   ]
 }

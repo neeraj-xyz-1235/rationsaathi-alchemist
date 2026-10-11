@@ -42,7 +42,7 @@ def make_record(id, rule_id, value, unit, on, **kw):
            "quantity": {"value": value, "unit": unit} if value is not None else None,
            "date": on, "status": "confirmed", "entry_method": "manual",
            "evidence": {"receipt_ref": "x", "note": None, "no_receipt": False,
-                        "receipt_text": None}}
+                        "receipt_text": None, "proof_photo": False}}
     rec.update(kw)
     return rec
 

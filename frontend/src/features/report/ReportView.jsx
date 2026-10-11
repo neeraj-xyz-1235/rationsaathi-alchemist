@@ -101,7 +101,7 @@ export default function ReportView({ result, caseData, showComplaintsLink = true
 
       <section className="rs-panel">
         <h2>Distribution records and evidence</h2>
-        <p className="rs-muted rs-small">{s.records} record(s): {s.with_receipt_ref} with a receipt number, {s.with_receipt_text} with pasted receipt text, {s.no_receipt} stated as having no receipt, {s.no_evidence} with no evidence given.</p>
+        <p className="rs-muted rs-small">{s.records} record(s): {s.with_proof_photo} with a receipt photo, {s.with_receipt_ref} with a receipt number, {s.with_receipt_text} with pasted receipt text, {s.no_receipt} stated as having no receipt, {s.no_evidence} with no evidence given.</p>
         <div className="rs-table-wrap">
           <table className="rs-table">
             <thead><tr><th>Date</th><th>Item</th><th>Quantity</th><th>Status</th><th>Evidence</th></tr></thead>

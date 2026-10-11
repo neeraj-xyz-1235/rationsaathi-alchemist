@@ -36,6 +36,7 @@ export function cleanCase(c) {
         note: orNull(r.evidence?.note),
         no_receipt: Boolean(r.evidence?.no_receipt),
         receipt_text: r.evidence?.receipt_text ? r.evidence.receipt_text : null, // verbatim
+        proof_photo: Boolean(r.evidence?.proof_photo),
       },
     })),
   }
