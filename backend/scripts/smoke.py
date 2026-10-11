@@ -187,6 +187,28 @@ def email_endpoint():
         assert c.delete(f"/api/cases/{cid}").status_code == 204
 
 
+def grievance_notes():
+    """Needs the auth check to have run (reuses its account)."""
+    assert ACCOUNT, "auth check did not complete"
+    note = {"portal_key": "cpgrams", "reference_no": "ABC123", "filed_on": "2026-10-03",
+            "status": "filed", "note": "Smoke test note"}
+    with httpx.Client(base_url=BASE, timeout=30) as c:
+        assert c.post("/api/auth/login", json=ACCOUNT).status_code == 200
+        cid = c.post("/api/cases", json=DEMO).json()["id"]
+        base = f"/api/cases/{cid}/grievances"
+        r = c.post(base, json=note)
+        assert r.status_code == 201, r.text
+        gid = r.json()["id"]
+        assert c.post(base, json={**note, "status": "bogus"}).status_code == 422
+        assert [n["id"] for n in c.get(base).json()] == [gid]
+        r = c.put(f"{base}/{gid}", json={**note, "status": "resolved"})
+        assert r.status_code == 200 and r.json()["status"] == "resolved", r.text
+        assert httpx.get(f"{BASE}{base}", timeout=30).status_code == 401, "must need login"
+        assert c.delete(f"{base}/{gid}").status_code == 204
+        assert c.get(base).json() == []
+        assert c.delete(f"/api/cases/{cid}").status_code == 204
+
+
 check("GET  /api/health", health)
 check("POST /api/calculate (demo: rice 20-14=6 shortfall, wheat 10-10=0)", calculate_demo)
 check("POST /api/calculate rejects 1.2345 kg (never rounds)", calculate_rejects_rounding)
@@ -196,6 +218,7 @@ check("POST /api/receipt/parse (English + Hindi/Devanagari digits, date resolved
 check("GET  /api/shops/nearby is an honest placeholder (no invented shops)", shops_placeholder)
 check("tracker + next-month: rules copied, records not, 409 on repeat, numbers match", tracker_and_next_month)
 check("email report: no recipient field accepted; 503 when no provider key", email_endpoint)
+check("grievance notes: create -> list -> update -> delete, login required", grievance_notes)
 check("auth: wrong credentials -> 401 INVALID_CREDENTIALS", auth_rejects_bad_login)
 check("security: foreign Origin on POST -> 403 BAD_ORIGIN", csrf_blocked)
 

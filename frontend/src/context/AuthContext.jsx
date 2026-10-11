@@ -1,5 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { authApi } from '../api/client.js'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
+import { api } from '../api/client.js'
 
 const AuthContext = createContext(null)
 
@@ -9,34 +15,83 @@ export function AuthProvider({ children }) {
 
   const refreshUser = useCallback(async () => {
     try {
-      const data = await authApi.me()
-      setUser(data?.user || data || null)
+      const response = await api.get('/auth/me')
+      const currentUser = response?.user ?? response
+      setUser(currentUser ?? null)
+      return currentUser ?? null
     } catch (error) {
-      if (error.status === 401 || error.status === 404) setUser(null)
-      // A server outage should not keep guest access blocked.
-    } finally { setLoading(false) }
+      if (error.status === 401 || error.status === 403) {
+        setUser(null)
+        return null
+      }
+      throw error
+    }
   }, [])
 
-  useEffect(() => { refreshUser() }, [refreshUser])
+  useEffect(() => {
+    let active = true
+
+    async function initialise() {
+      try {
+        const response = await api.get('/auth/me')
+        if (active) {
+          setUser(response?.user ?? response ?? null)
+        }
+      } catch (error) {
+        if (active && (error.status === 401 || error.status === 403)) {
+          setUser(null)
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    initialise()
+    return () => {
+      active = false
+    }
+  }, [])
+
   const login = useCallback(async (credentials) => {
-    const data = await authApi.login(credentials)
-    setUser(data?.user || data || null)
-    return data
-  }, [])
+    await api.post('/auth/login', credentials)
+    return refreshUser()
+  }, [refreshUser])
+
   const signup = useCallback(async (details) => {
-    const data = await authApi.signup(details)
-    setUser(data?.user || data || null)
-    return data
-  }, [])
+    await api.post('/auth/register', details)
+    return refreshUser()
+  }, [refreshUser])
+
   const logout = useCallback(async () => {
-    try { await authApi.logout() } finally { setUser(null) }
+    try {
+      await api.post('/auth/logout', {})
+    } finally {
+      setUser(null)
+    }
   }, [])
-  const value = useMemo(() => ({ user, loading, login, signup, logout, refreshUser }), [user, loading, login, signup, logout, refreshUser])
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+
+  const value = {
+    user,
+    loading,
+    login,
+    signup,
+    logout,
+    refreshUser,
+  }
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export function useAuth() {
-  const value = useContext(AuthContext)
-  if (!value) throw new Error('useAuth must be used within AuthProvider')
-  return value
+  const context = useContext(AuthContext)
+
+  if (!context) {
+    throw new Error('useAuth must be used inside AuthProvider')
+  }
+
+  return context
 }

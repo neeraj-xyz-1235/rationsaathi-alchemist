@@ -356,3 +356,24 @@ class EmailRequest(Strict):
 class EmailQueued(BaseModel):
     status: Literal["queued"]
     sent_to: str
+
+
+# ── Grievance notes (2.9) ────────────────────────────────
+
+class GrievanceIn(Strict):
+    portal_key: str = Field(pattern=r"^[a-z0-9_-]{1,40}$")
+    reference_no: str | None = Field(None, max_length=60)
+    filed_on: dt.date | None = None
+    status: Literal["prepared", "filed", "resolved", "closed"]
+    note: str | None = Field(None, max_length=500)
+
+
+class GrievanceOut(BaseModel):
+    id: str
+    portal_key: str
+    reference_no: str | None
+    filed_on: dt.date | None
+    status: Literal["prepared", "filed", "resolved", "closed"]
+    note: str | None
+    created_at: str
+    updated_at: str
