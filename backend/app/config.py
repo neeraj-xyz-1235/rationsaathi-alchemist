@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     # Ration-card proof check: a vision-capable model on the SAME provider (LLM_BASE_URL/API_KEY).
     # Empty = no AI check; every proof then waits for manual review.
     LLM_VISION_MODEL: str = ""
-    VISION_TIMEOUT_S: float = 30.0
+    VISION_TIMEOUT_S: float = 60.0
     PROOF_AUTO_ACCEPT: bool = True
     APP_ORIGIN: str = "http://localhost:5173"      # several allowed: comma separated
     COOKIE_SECURE: bool = False

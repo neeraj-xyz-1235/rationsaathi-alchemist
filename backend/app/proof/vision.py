@@ -117,7 +117,7 @@ def _json_from(text: str) -> dict:
 
 
 def transcribe(image: bytes, mime: str) -> Transcription:
-    data = _ask(SYSTEM_PROMPT, "Transcribe this ration card.", image, mime, 400)
+    data = _ask(SYSTEM_PROMPT, "Transcribe this ration card.", image, mime, 3000)
     try:
         return Transcription.model_validate(data)
     except ValidationError as e:
@@ -164,7 +164,7 @@ class ReceiptReading(BaseModel):
 
 
 def read_receipt(image: bytes, mime: str) -> ReceiptReading:
-    data = _ask(RECEIPT_PROMPT, "Transcribe this receipt.", image, mime, 300)
+    data = _ask(RECEIPT_PROMPT, "Transcribe this receipt.", image, mime, 3000)
     try:
         return ReceiptReading.model_validate(ReceiptReading._coerce(data))
     except (ValidationError, AttributeError) as e:
