@@ -6,9 +6,10 @@ The image is sent once and never stored."""
 import base64
 import json
 import logging
+import re
 
 import httpx
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, ValidationError
 
 from app.config import settings
 
@@ -74,14 +75,45 @@ def _ask(system_prompt: str, user_text: str, image: bytes, mime: str, max_tokens
     }
     try:
         with _client() as client:
-            resp = client.post(settings.LLM_BASE_URL.rstrip("/") + "/chat/completions",
-                               headers=headers, json=body)
+            url = settings.LLM_BASE_URL.rstrip("/") + "/chat/completions"
+            resp = client.post(url, headers=headers, json=body)
+            if resp.status_code == 400 and "response_format" in body:
+                # some vision models reject JSON mode: ask again without it (the prompt already says JSON)
+                body.pop("response_format")
+                resp = client.post(url, headers=headers, json=body)
         resp.raise_for_status()
-        return json.loads(resp.json()["choices"][0]["message"]["content"])
+        return _json_from(resp.json()["choices"][0]["message"]["content"])
+    except httpx.HTTPStatusError as e:
+        # the provider's error text (model not found, no image support, bad key...) holds no user data
+        log.warning("vision call failed: HTTP %s %s", e.response.status_code, _provider_error(e.response))
+        raise VisionUnavailable(f"HTTP_{e.response.status_code}") from e
     except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError) as e:
         # never log the image, the key or what was read; the exception class is enough
         log.warning("vision call failed (%s)", type(e).__name__)
         raise VisionUnavailable(type(e).__name__) from e
+
+
+def _provider_error(resp: httpx.Response) -> str:
+    try:
+        err = resp.json().get("error", {})
+        return str(err.get("message") or err)[:200]
+    except Exception:  # noqa: BLE001
+        return "(no error text)"
+
+
+_THINK = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+
+
+def _json_from(text: str) -> dict:
+    """Models wrap JSON in thinking blocks or code fences: take the first JSON object."""
+    text = _THINK.sub("", text or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end <= start:
+        raise ValueError("no JSON object in reply")
+    data = json.loads(text[start:end + 1])
+    if not isinstance(data, dict):
+        raise ValueError("reply is not an object")
+    return data
 
 
 def transcribe(image: bytes, mime: str) -> Transcription:
@@ -102,6 +134,9 @@ Rules:
 - Copy only what is clearly printed or written, exactly as it appears. Use null if missing or unreadable.
 - Never guess, convert, calculate or add up. Do not translate item names.
 - Report ONE item line: the main grain line (rice / wheat or their Hindi/Marathi names) if there is one.
+- quantity_text is the quantity actually ISSUED or received (columns like "Issued Qty", "Qty issued", "Quantity"). \nNever use an "Allocated", "Entitled", "Quota", "Balance", "Rate" or "Total (Rs)" figure.
+- unit_text is the unit of that same quantity (kg, g, ...). date_text is the issue / receipt date as printed.
+- receipt_ref is the receipt / bill number as printed (e.g. "Receipt No.").
 - is_receipt is true only if the image is plausibly a shop receipt, bill or ration slip.
 
 Reply with ONLY a JSON object:
@@ -110,13 +145,16 @@ Reply with ONLY a JSON object:
 
 
 class ReceiptReading(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    is_receipt: bool
-    item_text: str | None = Field(None, max_length=120)
-    quantity_text: str | None = Field(None, max_length=30)
-    unit_text: str | None = Field(None, max_length=30)
-    date_text: str | None = Field(None, max_length=40)
-    receipt_ref: str | None = Field(None, max_length=60)
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+    is_receipt: bool = True
+    item_text: str | None = Field(None, max_length=120, validation_alias=AliasChoices("item_text", "item", "item_name"))
+    quantity_text: str | None = Field(None, max_length=30, validation_alias=AliasChoices(
+        "quantity_text", "quantity", "issued_quantity", "issued_qty"))
+    unit_text: str | None = Field(None, max_length=30, validation_alias=AliasChoices("unit_text", "unit"))
+    date_text: str | None = Field(None, max_length=40, validation_alias=AliasChoices(
+        "date_text", "date", "issue_date"))
+    receipt_ref: str | None = Field(None, max_length=60, validation_alias=AliasChoices(
+        "receipt_ref", "receipt_no", "receipt_number"))
 
     @classmethod
     def _coerce(cls, data: dict) -> dict:
@@ -130,5 +168,5 @@ def read_receipt(image: bytes, mime: str) -> ReceiptReading:
     try:
         return ReceiptReading.model_validate(ReceiptReading._coerce(data))
     except (ValidationError, AttributeError) as e:
-        log.warning("receipt reply did not fit (%s)", type(e).__name__)
+        log.warning("receipt reply did not fit (%s) keys=%s", type(e).__name__, sorted(data)[:12])
         raise VisionUnavailable(type(e).__name__) from e

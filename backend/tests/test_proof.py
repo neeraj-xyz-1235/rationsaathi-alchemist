@@ -277,3 +277,65 @@ def test_auto_accept_unsticks_older_review_rows(user, monkeypatch):
     assert user.get("/api/household/profile").json()["profile"]["proof_status"] == "needs_review"
     monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
     assert user.get("/api/household/profile").json()["profile"]["proof_status"] == "verified"
+
+
+# ── tolerant reading of model replies ────────────────────
+
+def _reply(monkeypatch, content, statuses=None, seen=None):
+    import json as _json
+    import httpx
+    calls = iter(statuses or [200])
+
+    def handler(request):
+        if seen is not None:
+            seen.append(_json.loads(request.content))
+        code = next(calls, 200)
+        if code != 200:
+            return httpx.Response(code, json={"error": {"message": "model does not support image input"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}]})
+
+    _provider(monkeypatch, handler)
+
+
+def test_think_blocks_and_code_fences_are_stripped(monkeypatch):
+    from app.proof import vision
+    _reply(monkeypatch, '<think>hmm, let me look...</think>\n```json\n'
+                        '{"is_receipt": true, "item_text": "Wheat", "quantity_text": "2"}\n```')
+    r = vision.read_receipt(JPEG, "image/jpeg")
+    assert r.item_text == "Wheat" and r.quantity_text == "2"
+
+
+def test_alternative_key_names_are_accepted(monkeypatch):
+    from app.proof import vision
+    _reply(monkeypatch, '{"item": "Wheat", "issued_qty": 2, "unit": "kg", "issue_date": "11 Oct 2026", '
+                        '"receipt_no": "RS-1"}')
+    r = vision.read_receipt(JPEG, "image/jpeg")
+    assert (r.item_text, r.quantity_text, r.unit_text, r.date_text, r.receipt_ref) == \
+        ("Wheat", "2", "kg", "11 Oct 2026", "RS-1")
+    assert r.is_receipt is True
+
+
+def test_json_mode_rejected_retries_without_it(monkeypatch):
+    from app.proof import vision
+    seen = []
+    _reply(monkeypatch, '{"is_receipt": true, "item_text": "Rice"}', statuses=[400, 200], seen=seen)
+    assert vision.read_receipt(JPEG, "image/jpeg").item_text == "Rice"
+    assert "response_format" in seen[0] and "response_format" not in seen[1]
+
+
+def test_provider_error_is_logged_without_user_data(monkeypatch, caplog):
+    from app.proof import vision
+    _reply(monkeypatch, "{}", statuses=[404])
+    with caplog.at_level("WARNING"), pytest.raises(VisionUnavailable):
+        vision.read_receipt(JPEG, "image/jpeg")
+    assert "HTTP 404" in caplog.text and "does not support image input" in caplog.text
+    assert "secret" not in caplog.text                      # the API key never appears
+
+
+def test_health_reports_vision_setting(monkeypatch):
+    from app.config import settings
+    with TestClient(app) as c:
+        assert c.get("/api/health").json()["vision"] == "not_configured"
+        monkeypatch.setattr(settings, "LLM_BASE_URL", "https://x/v1")
+        monkeypatch.setattr(settings, "LLM_VISION_MODEL", "m")
+        assert c.get("/api/health").json()["vision"] == "configured"
