@@ -8,6 +8,7 @@ import AuthPage from './pages/AuthPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import { useLang } from './i18n/index.jsx'
 import { useAuth } from './context/AuthContext.jsx'
+import LegalPage from './pages/LegalPage.jsx'
 
 function PlaceholderPage({ title, description, onBack }) {
   const { t } = useLang()
@@ -41,5 +42,37 @@ export default function App() {
     <Route path="/complaints" element={<><Header onHelp={openHelp} /><PlaceholderPage title="Complaints & help" description={t('comingPage')} onBack={() => go('/')} /><Footer /></>} />
     <Route path="/shops" element={<><Header onHelp={openHelp} /><PlaceholderPage title={t('shopTitle')} description={t('shopDescription')} onBack={() => go('/')} /><Footer /></>} />
     <Route path="*" element={<><Header onHelp={openHelp} /><PlaceholderPage title={t('notFound')} description={t('notFoundText')} onBack={() => go('/')} /><Footer /></>} />
+    <Route
+  path="/privacy"
+  element={
+    <>
+      <Header onHelp={openHelp} />
+      <LegalPage type="privacy" />
+      <Footer />
+    </>
+  }
+/>
+
+<Route
+  path="/cookies"
+  element={
+    <>
+      <Header onHelp={openHelp} />
+      <LegalPage type="cookies" />
+      <Footer />
+    </>
+  }
+/>
+
+<Route
+  path="/terms"
+  element={
+    <>
+      <Header onHelp={openHelp} />
+      <LegalPage type="terms" />
+      <Footer />
+    </>
+  }
+/>
   </Routes></div></div>
 }

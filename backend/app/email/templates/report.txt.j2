@@ -1,0 +1,31 @@
+{{ subject }}
+
+{{ s.greeting }}
+{{ s.intro.format(period=period) }}
+
+{% for it in items %}
+== {{ it.item }} ==
+{{ s.expected }}: {{ it.expected }} {{ it.unit }}
+{{ s.received }}: {{ it.received }} {{ it.unit }}
+{{ s.remaining }}: {{ it.remaining }} {{ it.unit }}
+{{ s.difference }}: {{ it.difference }} {{ it.unit }}
+
+{{ it.sentence }}
+{{ it.balance }}
+{% for n in it.notes %}
+{{ n }}
+{% endfor %}
+
+{% endfor %}
+{% for n in notes %}
+{{ n }}
+{% endfor %}
+{{ s.carry_note }}
+
+{{ s.open_report }}: {{ link }}
+{{ s.link_note }}
+
+{{ s.report_footer }}
+
+--
+{{ s.email_footer }}

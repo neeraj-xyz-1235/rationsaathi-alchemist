@@ -3,6 +3,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.db.session import engine
+from app.email import sender as email_sender
 
 router = APIRouter(prefix="/api")
 
@@ -18,6 +19,6 @@ def health():
     return {
         "status": "ok" if db == "ok" else "degraded",
         "db": db,
-        "llm": "configured" if settings.ANTHROPIC_API_KEY else "not_configured",
-        "email": "configured" if settings.EMAIL_API_KEY else "not_configured",
+        "llm": "configured" if settings.LLM_BASE_URL and settings.LLM_MODEL else "not_configured",
+        "email": "configured" if email_sender.is_configured() else "not_configured",
     }

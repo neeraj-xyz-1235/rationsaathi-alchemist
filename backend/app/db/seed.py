@@ -52,7 +52,9 @@ def main():
         add_case(db, user, "Home", 4, date(2026, 9, 1), date(2026, 9, 30), rice_wheat, [
             ("d1", "r-rice", "Rice", 8000, date(2026, 9, 3), "101", None),
             ("d2", "r-rice", "Rice", 6000, date(2026, 9, 20), "145", None),
-        ])  # rice 14 of 20 kg
+            ("d3", "r-wheat", "Wheat", 10000, date(2026, 9, 5), None,
+             "Collected at shop, no receipt given"),
+        ])  # rice 14 of 20 kg, wheat 10 of 10 kg
         add_case(db, user, "Home", 4, date(2026, 8, 1), date(2026, 8, 31), rice_wheat, [
             ("d1", "r-rice", "Rice", 10000, date(2026, 8, 4), "A-201", None),
             ("d2", "r-rice", "Rice", 10000, date(2026, 8, 19), "A-244", None),

@@ -1,4 +1,4 @@
-# Backend Plan — FastAPI (G + N)
+﻿# Backend Plan — FastAPI (G + N)
 
 Read plan_overview.txt first. §2 of this file is the API CONTRACT, which M and A build their
 mocks from. G owns it, except the auth part (§2.5), which N owns.
@@ -410,6 +410,9 @@ Tests (tests/test_balance.py, tests/test_tracker.py, tests/test_email.py):
        - date logic (§4.3)
 
 ### 4.2 Claude extractor (parser/llm_parser.py)
+  - CHANGED: the LLM reader is now provider-agnostic and uses a FREE OpenAI-compatible API
+    (Groq / Gemini / OpenRouter / Ollama) via LLM_BASE_URL + LLM_MODEL + LLM_API_KEY. No Anthropic
+    key is needed. Everything below about raw strings, fallback and prompt rules still applies.
   - Anthropic Python SDK: client.messages.parse(model=settings.LLM_MODEL,
     max_tokens=2000, output_config={"effort": "low"}, output_format=ReceiptExtraction, ...)
     → response.parsed_output is a validated Pydantic object (structured outputs).

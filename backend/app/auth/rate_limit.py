@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from fastapi import HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.db.models import AuthAttempt
+from app.db.models import AuthAttempt, EmailLog
 
 from .sessions import as_utc, now
 
@@ -114,7 +114,7 @@ class SlidingWindow:
 
 general_limiter = SlidingWindow(120, 60)     # everything else, per IP
 calculate_limiter = SlidingWindow(60, 60)    # /api/calculate, per IP
-parse_ip_limiter = SlidingWindow(10, 60)     # /api/receipt/parse, per IP (next steps)
+parse_ip_limiter = SlidingWindow(10, 60)     # /api/receipt/parse, per IP
 parse_user_limiter = SlidingWindow(30, 60)   # /api/receipt/parse, per logged-in user
 ALL_LIMITERS = [general_limiter, calculate_limiter, parse_ip_limiter, parse_user_limiter]
 
@@ -128,3 +128,34 @@ def limit_calculate(request: Request) -> None:
     wait = calculate_limiter.hit(client_ip(request))
     if wait:
         raise too_many(wait)
+
+
+# ── DB-backed: emailing a report (counted from email_log; every attempt counts) ──
+
+EMAIL_USER_HOURLY = 3
+EMAIL_USER_DAILY = 10
+EMAIL_APP_HOURLY = 30
+
+
+def check_email_allowed(db: Session, user_id) -> None:
+    t = now()
+
+    def times(since, mine):
+        q = db.query(EmailLog.created_at).filter(EmailLog.created_at >= since)
+        if mine:
+            q = q.filter(EmailLog.user_id == user_id)
+        return [row[0] for row in q]
+
+    hour, day = timedelta(hours=1), timedelta(days=1)
+    for stamps, limit, window in (
+        (times(t - hour, True), EMAIL_USER_HOURLY, hour),
+        (times(t - day, True), EMAIL_USER_DAILY, day),
+        (times(t - hour, False), EMAIL_APP_HOURLY, hour),
+    ):
+        if len(stamps) >= limit:
+            raise too_many(_retry_after(stamps, limit, window))
+
+
+def cleanup_old_email_log(db: Session) -> None:
+    db.query(EmailLog).filter(EmailLog.created_at < now() - timedelta(days=7)).delete()
+    db.commit()

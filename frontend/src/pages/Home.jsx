@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowRight, ClipboardList, FileChartColumnIncreasing, Info, MapPinned, PackageCheck, UsersRound, Wheat, Check } from 'lucide-react'
 import { useLang } from '../i18n/index.jsx'
 import ActionCard from '../components/ui/ActionCard.jsx'
+import EntitlementScanner from '../components/ui/EntitlementScanner.jsx'
 
 const steps = [
   { icon: UsersRound, title: 'step1Title', description: 'step1Description' },
@@ -52,7 +53,7 @@ export default function Home({ onNavigate }) {
         <FamilyIllustration label={t('illustrationAlt')} />
         <div className="hero-swoosh" aria-hidden="true" />
       </section>
-
+  <EntitlementScanner />
       <section className="actions-section page-container" aria-labelledby="action-title">
         <div className="section-heading">
           <div>

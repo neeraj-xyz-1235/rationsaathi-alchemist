@@ -1,7 +1,7 @@
 """Pydantic models = the API contract (plan_backend.txt section 2)."""
 import datetime as dt
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -253,3 +253,106 @@ class UserOut(BaseModel):
 
 class UserEnvelope(BaseModel):
     user: UserOut
+
+
+# ── Saved cases + reports (2.4) ──────────────────────────
+
+class CaseSummary(BaseModel):
+    id: str
+    household_ref: str | None
+    period: Period
+    updated_at: str
+
+
+class CaseCreated(BaseModel):
+    id: str
+
+
+class ReportCreated(BaseModel):
+    report_id: str
+    case: Case
+    result: CalculateResult
+
+
+class ReportOut(BaseModel):
+    report_id: str
+    generated_at: str
+    case: Case
+    result: CalculateResult
+
+
+# ── Receipt parsing (2.3) ────────────────────────────────
+
+class ParseRequest(Strict):
+    text: str = Field(min_length=1, max_length=2000)
+    period: Period
+    known_items: list[Annotated[str, Field(max_length=60)]] = Field(default_factory=list, max_length=20)
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, v):
+        if not v.strip():
+            raise ValueError("TEXT_REQUIRED")
+        return v
+
+
+class Suggestion(BaseModel):
+    item: str | None
+    item_matches_rule: bool
+    quantity: Quantity | None
+    date: dt.date | None
+    date_raw: str | None
+    date_candidates: list[dt.date]
+    receipt_ref: str | None
+    issues: list[str]
+
+
+class ParseResponse(BaseModel):
+    method: Literal["llm", "regex"]
+    raw_text: str
+    suggestions: list[Suggestion]
+
+
+# ── Shops placeholder (2.6) and tracker (2.7) ────────────
+
+class ShopsResponse(BaseModel):
+    status: Literal["planned"]
+    shops: list[dict]
+    message_code: Literal["SHOPS_COMING_SOON"]
+
+
+class TrackerItem(BaseModel):
+    item: str
+    unit: Unit
+    expected: str
+    received: str
+    remaining: str
+    over_by: str
+    percent_used: str
+    labels: list[str]
+
+
+class TrackerMonth(BaseModel):
+    case_id: str
+    period: PeriodResult
+    items: list[TrackerItem]
+
+
+class TrackerHousehold(BaseModel):
+    household_ref: str | None
+    months: list[TrackerMonth]
+
+
+class TrackerResponse(BaseModel):
+    households: list[TrackerHousehold]
+
+
+# ── Email a report (2.8) ─────────────────────────────────
+
+class EmailRequest(Strict):
+    lang: Literal["en", "hi", "mr"]
+
+
+class EmailQueued(BaseModel):
+    status: Literal["queued"]
+    sent_to: str

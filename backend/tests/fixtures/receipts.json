@@ -1,1 +1,417 @@
-[]
+{
+  "period": {
+    "start": "2026-09-01",
+    "end": "2026-09-30"
+  },
+  "known_items": [
+    "Rice",
+    "Wheat"
+  ],
+  "receipts": [
+    {
+      "name": "demo text (date resolved by the period)",
+      "text": "Rice 8kg recvd 03/09 Rcpt#101",
+      "expect": [
+        {
+          "item": "Rice",
+          "item_matches_rule": true,
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03",
+          "receipt_ref": "101",
+          "issues": [
+            "DATE_AMBIGUOUS_RESOLVED_BY_PERIOD",
+            "YEAR_INFERRED_FROM_PERIOD"
+          ],
+          "date_candidates": [
+            "2026-09-03",
+            "2026-03-09"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ambiguous date outside the period stays null",
+      "text": "Wheat 5 kg received 12/10",
+      "expect": [
+        {
+          "item": "Wheat",
+          "quantity": [
+            "5",
+            "kg"
+          ],
+          "date": null,
+          "issues": [
+            "DATE_AMBIGUOUS",
+            "YEAR_INFERRED_FROM_PERIOD"
+          ],
+          "date_candidates": [
+            "2026-10-12",
+            "2026-12-10"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ambiguous date resolved by the period",
+      "text": "Wheat 1,5 kg 12/09",
+      "expect": [
+        {
+          "item": "Wheat",
+          "quantity": [
+            "1.5",
+            "kg"
+          ],
+          "date": "2026-09-12",
+          "issues": [
+            "DATE_AMBIGUOUS_RESOLVED_BY_PERIOD",
+            "YEAR_INFERRED_FROM_PERIOD"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Hindi item and unit",
+      "text": "चावल 8 किलो 03/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "item_matches_rule": true,
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03"
+        }
+      ]
+    },
+    {
+      "name": "Devanagari digits",
+      "text": "चावल ८ किलो ०३/०९",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03"
+        }
+      ]
+    },
+    {
+      "name": "Marathi, short unit, two-digit year",
+      "text": "गहू 2 कि.ग्रा 5-9-26",
+      "expect": [
+        {
+          "item": "Wheat",
+          "item_matches_rule": true,
+          "quantity": [
+            "2",
+            "kg"
+          ],
+          "date": "2026-09-05"
+        }
+      ]
+    },
+    {
+      "name": "Marathi rice",
+      "text": "तांदूळ 5 किलो",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "5",
+            "kg"
+          ],
+          "date": null,
+          "issues": [
+            "DATE_NOT_FOUND"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "two items on two lines",
+      "text": "Rice 8kg 03/09\nWheat 2.5 kg 05/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03"
+        },
+        {
+          "item": "Wheat",
+          "quantity": [
+            "2.5",
+            "kg"
+          ],
+          "date": "2026-09-05"
+        }
+      ]
+    },
+    {
+      "name": "two items on one line",
+      "text": "Rice 8kg, Wheat 2kg 20/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-20"
+        },
+        {
+          "item": "Wheat",
+          "quantity": [
+            "2",
+            "kg"
+          ],
+          "date": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "no date",
+      "text": "Rice 8 kg",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": null,
+          "issues": [
+            "DATE_NOT_FOUND"
+          ],
+          "date_candidates": []
+        }
+      ]
+    },
+    {
+      "name": "no unit",
+      "text": "rice 8",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": null,
+          "issues_include": [
+            "UNIT_NOT_FOUND",
+            "LOW_CONFIDENCE"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "comma decimal",
+      "text": "Rice 1,5 kg 20/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "1.5",
+            "kg"
+          ],
+          "date": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "item with no rule (kept as written, never invented)",
+      "text": "Sugar 1kg 12/09",
+      "expect": [
+        {
+          "item": "Sugar",
+          "item_matches_rule": false,
+          "quantity": [
+            "1",
+            "kg"
+          ],
+          "date": "2026-09-12",
+          "issues_include": [
+            "ITEM_NOT_IN_RULES"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unknown item words",
+      "text": "Kerosene 2 l 12/09",
+      "expect": [
+        {
+          "item": "Kerosene",
+          "item_matches_rule": false,
+          "quantity": [
+            "2",
+            "l"
+          ],
+          "issues_include": [
+            "ITEM_NOT_IN_RULES"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "month name",
+      "text": "Rice 8 kg 3 Sep",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03",
+          "issues": [
+            "YEAR_INFERRED_FROM_PERIOD"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "month name with year",
+      "text": "Rice 8 kg 03-Sep-2026",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03",
+          "issues": []
+        }
+      ]
+    },
+    {
+      "name": "dot-separated date with year",
+      "text": "Wheat 2 kg 03.09.2026",
+      "expect": [
+        {
+          "item": "Wheat",
+          "quantity": [
+            "2",
+            "kg"
+          ],
+          "date": "2026-09-03"
+        }
+      ]
+    },
+    {
+      "name": "unambiguous day",
+      "text": "Rice 4 kg 25/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "4",
+            "kg"
+          ],
+          "date": "2026-09-25",
+          "issues": [
+            "YEAR_INFERRED_FROM_PERIOD"
+          ],
+          "date_candidates": [
+            "2026-09-25"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "grams stay grams (no conversion here)",
+      "text": "Sugar 500 gm 20/09",
+      "expect": [
+        {
+          "item": "Sugar",
+          "quantity": [
+            "500",
+            "g"
+          ],
+          "date": "2026-09-20"
+        }
+      ]
+    },
+    {
+      "name": "decimal quantity is not mistaken for a date",
+      "text": "Rice 8.5 kg",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8.5",
+            "kg"
+          ],
+          "date": null
+        }
+      ]
+    },
+    {
+      "name": "too precise to store exactly",
+      "text": "Rice 1.2345 kg 03/09",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": null,
+          "issues_include": [
+            "QUANTITY_TOO_PRECISE"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "header date and receipt number on their own lines",
+      "text": "Date: 03/09/2026\nBill No. A-7\nRice 8 kg\nWheat 2 kg",
+      "expect": [
+        {
+          "item": "Rice",
+          "quantity": [
+            "8",
+            "kg"
+          ],
+          "date": "2026-09-03",
+          "receipt_ref": "A-7"
+        },
+        {
+          "item": "Wheat",
+          "quantity": [
+            "2",
+            "kg"
+          ],
+          "date": "2026-09-03",
+          "receipt_ref": "A-7"
+        }
+      ]
+    },
+    {
+      "name": "litres",
+      "text": "Edible oil 1 ltr 10/09",
+      "expect": [
+        {
+          "item": "Edible oil",
+          "quantity": [
+            "1",
+            "l"
+          ],
+          "date": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "name": "no quantity anywhere",
+      "text": "Ration shop receipt, thank you",
+      "expect": []
+    },
+    {
+      "name": "gibberish",
+      "text": "hello world",
+      "expect": []
+    }
+  ]
+}
