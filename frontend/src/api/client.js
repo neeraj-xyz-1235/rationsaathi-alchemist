@@ -1,102 +1,135 @@
-const API_BASE = '/api'
+const jsonHeaders = {
+  'Content-Type': 'application/json',
+}
 
 export class ApiError extends Error {
-  constructor(message, options = {}) {
+  constructor(
+    message,
+    { status, code, fields, retryAfter } = {},
+  ) {
     super(message)
     this.name = 'ApiError'
-    this.status = options.status ?? 0
-    this.code = options.code
-    this.fields = options.fields
-    this.retryAfter = options.retryAfter
+    this.status = status
+    this.code = code
+    this.fields = fields
+    this.retryAfter = retryAfter
   }
 }
 
 async function request(path, options = {}) {
-  const {
-    method = 'GET',
-    body,
-    headers = {},
-    signal,
-  } = options
-
-  const requestHeaders = {
-    Accept: 'application/json',
-    ...headers,
-  }
-
-  if (body !== undefined && !(body instanceof FormData)) {
-    requestHeaders['Content-Type'] = 'application/json'
-  }
+  const { authRequired = false, ...fetchOptions } = options
 
   let response
 
   try {
-    response = await fetch(`${API_BASE}${path}`, {
-      method,
-      credentials: 'include',
-      headers: requestHeaders,
-      body:
-        body === undefined
-          ? undefined
-          : body instanceof FormData
-            ? body
-            : JSON.stringify(body),
-      signal,
+    response = await fetch(path, {
+      ...fetchOptions,
+      credentials: 'same-origin',
+      headers: {
+        ...jsonHeaders,
+        ...(fetchOptions.headers || {}),
+      },
     })
   } catch (error) {
     if (error.name === 'AbortError') throw error
 
     throw new ApiError(
-      'Unable to reach the server. Check your connection and try again.',
+      'Could not connect to the server. Please try again.',
     )
   }
 
-  const contentType = response.headers.get('content-type') || ''
-  let data = null
-
-  if (response.status !== 204) {
-    try {
-      data = contentType.includes('application/json')
-        ? await response.json()
-        : await response.text()
-    } catch {
-      data = null
-    }
-  }
+  const payload =
+    response.status === 204
+      ? null
+      : await response.json().catch(() => null)
 
   if (!response.ok) {
-    const detail =
-      typeof data === 'string'
-        ? data
-        : data?.detail || data?.message || data?.error
-
-    const error = new ApiError(
-      detail || `Request failed with status ${response.status}.`,
-      {
-        status: response.status,
-        code: data?.code,
-        fields: data?.fields,
-        retryAfter: Number(response.headers.get('Retry-After')) || undefined,
-      },
-    )
-
-    if (response.status === 401) {
-      window.dispatchEvent(new CustomEvent('rationsaathi:unauthorized'))
+    if (
+      response.status === 401 &&
+      authRequired &&
+      typeof window !== 'undefined'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('rationsaathi:unauthorized', {
+          detail: { path },
+        }),
+      )
     }
 
-    throw error
+    const errorPayload = payload?.error || {}
+
+    throw new ApiError(
+      errorPayload.message ||
+        errorPayload.code ||
+        payload?.detail ||
+        'Request failed. Please try again.',
+      {
+        status: response.status,
+        code: errorPayload.code || payload?.code,
+        fields: errorPayload.fields || payload?.fields,
+        retryAfter:
+          Number(
+            response.headers.get('Retry-After') ||
+              errorPayload.retry_after_s ||
+              0,
+          ) || undefined,
+      },
+    )
   }
 
-  return data
+  return payload
 }
 
-export const api = {
-  get: (path, options) => request(path, { ...options, method: 'GET' }),
-  post: (path, body, options) =>
-    request(path, { ...options, method: 'POST', body }),
-  put: (path, body, options) =>
-    request(path, { ...options, method: 'PUT', body }),
-  patch: (path, body, options) =>
-    request(path, { ...options, method: 'PATCH', body }),
-  delete: (path, options) => request(path, { ...options, method: 'DELETE' }),
+export const authApi = {
+  login: (data) =>
+    request('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  signup: (data) =>
+    request('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  me: () =>
+    request('/api/auth/me', {
+      method: 'GET',
+      headers: {},
+    }),
+
+  logout: () =>
+    request('/api/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
 }
+
+export const apiGet = (path) =>
+  request(path, {
+    method: 'GET',
+    authRequired: true,
+    headers: {},
+  })
+
+export const apiPost = (path, data) =>
+  request(path, {
+    method: 'POST',
+    authRequired: true,
+    body: JSON.stringify(data),
+  })
+
+export const apiPut = (path, data) =>
+  request(path, {
+    method: 'PUT',
+    authRequired: true,
+    body: JSON.stringify(data),
+  })
+
+export const apiDelete = (path) =>
+  request(path, {
+    method: 'DELETE',
+    authRequired: true,
+    headers: {},
+  })

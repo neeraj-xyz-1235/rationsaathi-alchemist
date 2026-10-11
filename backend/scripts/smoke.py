@@ -16,6 +16,20 @@ import httpx
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
 DEMO = json.loads((Path(__file__).parent.parent / "tests/fixtures/demo_case.json").read_text("utf-8"))
 
+
+# Browsers always send an Origin header on POST/PUT/DELETE. Do the same here so the check also
+# works through the Vite dev proxy:  python scripts/smoke.py http://localhost:5173
+_orig_request = httpx.Client.request
+
+
+def _request_with_origin(self, method, url, **kw):
+    headers = dict(kw.pop("headers", None) or {})
+    headers.setdefault("Origin", BASE)
+    return _orig_request(self, method, url, headers=headers, **kw)
+
+
+httpx.Client.request = _request_with_origin
+
 results = []
 ACCOUNT = {}   # filled by the auth check, reused by the cases check
 

@@ -3,9 +3,10 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
-import { api } from '../api/client.js'
+import { authApi } from '../api/client.js'
 
 const AuthContext = createContext(null)
 
@@ -14,70 +15,84 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const refreshUser = useCallback(async () => {
+    // A 401 means "not logged in". A 429 (rate limit), a 5xx or a dropped connection says
+    // nothing about the session, so retry a couple of times before giving up; otherwise a
+    // valid session would look like a logout (and RequireAuth would bounce to /login).
+    const MAX_TRIES = 3
+
     try {
-      const response = await api.get('/auth/me')
-      const currentUser = response?.user ?? response
-      setUser(currentUser ?? null)
-      return currentUser ?? null
-    } catch (error) {
-      if (error.status === 401 || error.status === 403) {
-        setUser(null)
-        return null
+      for (let attempt = 1; attempt <= MAX_TRIES; attempt += 1) {
+        try {
+          const data = await authApi.me()
+          const currentUser = data?.user || data || null
+          setUser(currentUser)
+          return currentUser
+        } catch (error) {
+          if (error.status === 401 || error.status === 404) {
+            setUser(null)
+            return null
+          }
+
+          const transient =
+            !error.status || error.status === 429 || error.status >= 500
+
+          if (!transient || attempt === MAX_TRIES) {
+            console.error(
+              'Unable to restore RationSaathi session:',
+              error.message,
+            )
+            return null
+          }
+
+          const waitMs = Math.min(
+            Math.max((error.retryAfter || 0) * 1000, 800 * attempt),
+            5000,
+          )
+          await new Promise((resolve) => setTimeout(resolve, waitMs))
+        }
       }
-      throw error
+
+      return null
+    } finally {
+      setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    let active = true
-
-    async function initialise() {
-      try {
-        const response = await api.get('/auth/me')
-        if (active) {
-          setUser(response?.user ?? response ?? null)
-        }
-      } catch (error) {
-        if (active && (error.status === 401 || error.status === 403)) {
-          setUser(null)
-        }
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    initialise()
-    return () => {
-      active = false
-    }
-  }, [])
+    refreshUser()
+  }, [refreshUser])
 
   const login = useCallback(async (credentials) => {
-    await api.post('/auth/login', credentials)
-    return refreshUser()
-  }, [refreshUser])
+    const data = await authApi.login(credentials)
+    setUser(data?.user || data || null)
+    return data
+  }, [])
 
   const signup = useCallback(async (details) => {
-    await api.post('/auth/register', details)
-    return refreshUser()
-  }, [refreshUser])
+    const data = await authApi.signup(details)
+    setUser(data?.user || data || null)
+    return data
+  }, [])
 
   const logout = useCallback(async () => {
     try {
-      await api.post('/auth/logout', {})
+      await authApi.logout()
     } finally {
       setUser(null)
     }
   }, [])
 
-  const value = {
-    user,
-    loading,
-    login,
-    signup,
-    logout,
-    refreshUser,
-  }
+  const value = useMemo(
+    () => ({
+      user,
+      loading,
+      login,
+      signup,
+      logout,
+      refreshUser,
+    }),
+    [user, loading, login, signup, logout, refreshUser],
+  )
 
   return (
     <AuthContext.Provider value={value}>
@@ -87,11 +102,11 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
+  const value = useContext(AuthContext)
 
-  if (!context) {
-    throw new Error('useAuth must be used inside AuthProvider')
+  if (!value) {
+    throw new Error('useAuth must be used within AuthProvider')
   }
 
-  return context
+  return value
 }

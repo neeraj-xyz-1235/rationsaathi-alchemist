@@ -1,5 +1,6 @@
 """Request id, global rate limit, Origin check (CSRF), JSON-only bodies, body-size limit
 (plan_backend.txt 6.3, 6.4, 6.5). Pure ASGI so request bodies are never buffered here."""
+import re
 import uuid
 
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from app.auth.rate_limit import general_limiter
 from app.config import settings
 from app.errors import error_response
 
+_LOCAL_DEV_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$")
 MAX_BODY = 100 * 1024
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -32,11 +34,17 @@ def _origin_allowed(headers: Headers) -> bool:
         parts = ref.split("/", 3)
         source = "/".join(parts[:3])
     source = source.rstrip("/")
-    allowed = {settings.APP_ORIGIN.rstrip("/")}
+    # APP_ORIGIN may list several origins, comma separated
+    allowed = {o.strip().rstrip("/") for o in settings.APP_ORIGIN.split(",") if o.strip()}
     host = headers.get("host")
     if host:
         allowed |= {f"http://{host}", f"https://{host}"}
-    return source in allowed
+    if source in allowed:
+        return True
+    # Local development only (COOKIE_SECURE=false, i.e. plain http): the dev site may be opened
+    # as localhost or 127.0.0.1, on whatever port Vite picked. Production runs with
+    # COOKIE_SECURE=true, where this never applies.
+    return not settings.COOKIE_SECURE and bool(_LOCAL_DEV_ORIGIN.match(source))
 
 
 class SecurityMiddleware:

@@ -120,3 +120,40 @@ def test_no_stack_trace_on_500(client, monkeypatch):
     assert r.status_code == 500
     assert r.json() == {"error": {"code": "INTERNAL"}}
     assert "division" not in r.text and "Traceback" not in r.text
+
+
+# ── local development origins ────────────────────────────
+
+@pytest.mark.parametrize("origin", [
+    "http://127.0.0.1:5173", "http://localhost:5174", "http://localhost", "http://[::1]:5173",
+])
+def test_local_dev_origins_allowed_when_not_secure(client, origin):
+    r = client.post("/api/auth/login", json=LOGIN, headers={"Origin": origin})
+    assert r.status_code == 401                      # reached the handler (wrong password)
+
+
+@pytest.mark.parametrize("origin", [
+    "http://localhost.evil.example", "http://127.0.0.1.evil.example:5173",
+    "https://localhost:5173", "http://evil.example", "http://localhost:99999999",
+    "http://user@localhost:5173",
+])
+def test_lookalike_origins_still_blocked(client, origin):
+    r = client.post("/api/auth/login", json=LOGIN, headers={"Origin": origin})
+    assert r.status_code == 403
+
+
+def test_secure_mode_does_not_allow_local_origins(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+    r = client.post("/api/auth/login", json=LOGIN, headers={"Origin": "http://127.0.0.1:5173"})
+    assert r.status_code == 403
+    assert client.post("/api/auth/login", json=LOGIN, headers=GOOD).status_code == 401
+
+
+def test_app_origin_can_list_several(client, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "COOKIE_SECURE", True)
+    monkeypatch.setattr(settings, "APP_ORIGIN", "https://a.vercel.app, https://b.example.org")
+    for o in ("https://a.vercel.app", "https://b.example.org"):
+        assert client.post("/api/auth/login", json=LOGIN, headers={"Origin": o}).status_code == 401
+    assert client.post("/api/auth/login", json=LOGIN, headers=EVIL).status_code == 403

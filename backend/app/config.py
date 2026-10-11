@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_MODEL: str = ""
     LLM_TIMEOUT_S: float = 8.0
-    APP_ORIGIN: str = "http://localhost:5173"
+    APP_ORIGIN: str = "http://localhost:5173"      # several allowed: comma separated
     COOKIE_SECURE: bool = False
     ENABLE_DOCS: bool = True
     EMAIL_PROVIDER: str = "brevo"        # "brevo" or "resend"
