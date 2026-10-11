@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_MODEL: str = ""
     LLM_TIMEOUT_S: float = 8.0
+    # Ration-card proof check: a vision-capable model on the SAME provider (LLM_BASE_URL/API_KEY).
+    # Empty = no AI check; every proof then waits for manual review.
+    LLM_VISION_MODEL: str = ""
+    VISION_TIMEOUT_S: float = 30.0
     APP_ORIGIN: str = "http://localhost:5173"      # several allowed: comma separated
     COOKIE_SECURE: bool = False
     ENABLE_DOCS: bool = True

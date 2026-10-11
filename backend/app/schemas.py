@@ -379,3 +379,58 @@ class GrievanceOut(BaseModel):
     note: str | None
     created_at: str
     updated_at: str
+
+
+# ── Household profile (frontend setup page) ──────────────
+
+Gender = Literal["female", "male", "other", "prefer_not_to_say"]
+
+
+class HouseholdMember(Strict):
+    name: str = Field(min_length=1, max_length=80)
+    age: int = Field(ge=0, le=120)
+    gender: Gender
+    relationship: str = Field("member", max_length=30)
+
+    @field_validator("name", "relationship")
+    @classmethod
+    def _strip(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("REQUIRED")
+        return v
+
+
+class HouseholdProfileIn(Strict):
+    head_name: str = Field(min_length=1, max_length=80)
+    head_age: int = Field(ge=0, le=120)
+    head_gender: Gender
+    state: str = Field(min_length=1, max_length=60)
+    district: str = Field(min_length=1, max_length=60)
+    locality: str | None = Field(None, max_length=80)
+    card_type: Literal["AAY", "PHH", "STATE_OTHER", "UNKNOWN"]
+    card_colour: Literal["yellow", "orange", "white", "green", "blue", "other"]
+    card_number_last4: str | None = Field(None, max_length=4)
+    household_member_count: int | None = Field(None, ge=1, le=31)
+    members: list[HouseholdMember] = Field(default_factory=list, max_length=30)
+
+    @field_validator("head_name", "state", "district")
+    @classmethod
+    def _required_text(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("REQUIRED")
+        return v
+
+    @field_validator("locality", "card_number_last4")
+    @classmethod
+    def _blank_is_none(cls, v):
+        v = (v or "").strip()
+        return v or None
+
+    @field_validator("card_number_last4")
+    @classmethod
+    def _four_digits(cls, v):
+        if v is not None and not (len(v) == 4 and v.isdigit()):
+            raise ValueError("CARD_LAST4_INVALID")
+        return v

@@ -184,3 +184,31 @@ class GrievanceNote(Base):  # optional, cut first if time is short
         CheckConstraint("note IS NULL OR length(note) <= 500", name="ck_gn_note_len"),
         Index("grievance_notes_case_idx", "case_id"),
     )
+
+# ── Household workflow (profile, proof, withdrawals) ─────
+
+class Household(Base):
+    __tablename__ = "households"
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    head_name: Mapped[str] = mapped_column(Text, nullable=False)
+    head_age: Mapped[int] = mapped_column(Integer, nullable=False)
+    head_gender: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(Text, nullable=False)
+    district: Mapped[str] = mapped_column(Text, nullable=False)
+    locality: Mapped[str | None] = mapped_column(Text)
+    card_type: Mapped[str] = mapped_column(Text, nullable=False)
+    card_colour: Mapped[str] = mapped_column(Text, nullable=False)
+    card_number_last4: Mapped[str | None] = mapped_column(Text)
+    members = mapped_column(JsonType, nullable=False)       # list of member dicts (head first)
+    proof_status: Mapped[str] = mapped_column(Text, nullable=False, default="not_submitted")
+    proof_result = mapped_column(JsonType)                  # what the check found; never the file
+    proof_sha256: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        TS, server_default=func.now(), onupdate=func.now())
+    __table_args__ = (
+        CheckConstraint(
+            "proof_status IN ('not_submitted','verified','needs_review','rejected')",
+            name="ck_household_proof_status"),
+    )

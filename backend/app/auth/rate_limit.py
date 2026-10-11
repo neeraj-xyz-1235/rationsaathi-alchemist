@@ -116,7 +116,9 @@ general_limiter = SlidingWindow(120, 60)     # everything else, per IP
 calculate_limiter = SlidingWindow(60, 60)    # /api/calculate, per IP
 parse_ip_limiter = SlidingWindow(10, 60)     # /api/receipt/parse, per IP
 parse_user_limiter = SlidingWindow(30, 60)   # /api/receipt/parse, per logged-in user
-ALL_LIMITERS = [general_limiter, calculate_limiter, parse_ip_limiter, parse_user_limiter]
+proof_user_limiter = SlidingWindow(10, 3600)  # proof uploads (each one costs an AI call), per user
+ALL_LIMITERS = [general_limiter, calculate_limiter, parse_ip_limiter, parse_user_limiter,
+                proof_user_limiter]
 
 
 def reset_all() -> None:

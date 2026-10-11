@@ -13,6 +13,9 @@ from app.errors import error_response
 
 _LOCAL_DEV_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$")
 MAX_BODY = 100 * 1024
+# The one route that takes a file (ration-card proof): multipart, up to 8 MB + form overhead.
+UPLOAD_PATH = "/api/household/proof"
+MAX_UPLOAD_BODY = 9 * 1024 * 1024
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
 
@@ -58,6 +61,8 @@ class SecurityMiddleware:
         headers = Headers(scope=scope)
         request_id = uuid.uuid4().hex[:12]
         method, path = scope["method"], scope["path"]
+        is_upload = method == "POST" and path == UPLOAD_PATH
+        max_body = MAX_UPLOAD_BODY if is_upload else MAX_BODY
 
         async def send_with_id(message: Message):
             if message["type"] == "http.response.start":
@@ -82,11 +87,12 @@ class SecurityMiddleware:
             length = headers.get("content-length")
             has_body = (length not in (None, "0")) or "transfer-encoding" in headers
             ctype = headers.get("content-type", "").split(";")[0].strip().lower()
-            if has_body and ctype != "application/json":
+            wanted = "multipart/form-data" if is_upload else "application/json"
+            if has_body and ctype != wanted:
                 return await reject(error_response(
                     415, "VALIDATION_FAILED", fields={"_": "CONTENT_TYPE_NOT_JSON"}))
             # 4. size limit (declared, then counted while streaming)
-            if length and length.isdigit() and int(length) > MAX_BODY:
+            if length and length.isdigit() and int(length) > max_body:
                 return await reject(error_response(413, "PAYLOAD_TOO_LARGE"))
 
         seen = 0
@@ -96,7 +102,7 @@ class SecurityMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 seen += len(message.get("body", b""))
-                if seen > MAX_BODY:
+                if seen > max_body:
                     raise HTTPException(413, "PAYLOAD_TOO_LARGE")   # handled in errors.py
             return message
 
