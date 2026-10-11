@@ -1,0 +1,170 @@
+# RationSaathi — Team Plan (READ THIS FIRST)
+
+Problem: P-01 RationSaathi (full statement + G's summary + original frontend notes: context.txt)
+
+What we build in one sentence:
+  The user enters explicit entitlement rules, family size, and what they actually received (with
+  evidence). We show expected vs received vs difference, line by line, with the evidence attached,
+  in neutral language, in English / Hindi / Marathi.
+
+Other plan files:
+  plan_backend.txt     API contract (everyone reads §2), engine rules, receipt parser   — G + N
+  plan_db_schema.txt   database choice + tables                                         — G
+  plan_deployment.txt  repo layout, git workflow, CI, Vercel/Render/Neon, demo checklist — N
+  plan_frontend.txt    M/A split, state shape, API client, screen tasks                  — M + A
+
+Time assumption: about 6 hours of build time (context.txt plans for 5–6 hours). If we have
+longer, stretch Phase 1–2. Don't add features.
+
+
+## 1. Locked decisions (don't re-debate these during the hackathon)
+
+| Area             | Choice                                        | Why                                                                  |
+|------------------|-----------------------------------------------|----------------------------------------------------------------------|
+| Frontend         | React + Vite + Tailwind                       | Already planned in context.txt                                       |
+| Backend          | Python 3.12 + FastAPI                         | "Plain Python arithmetic" with Decimal; free Swagger UI at /docs     |
+| Database         | PostgreSQL on Neon (free tier)                | Data is relational (case → rules → records); free tier is easy to set up |
+|                  | SQLite automatically for local dev            | Same SQLAlchemy code, so nobody has to install Postgres              |
+| Frontend hosting | Vercel                                        | Zero-config for Vite; every PR gets its own preview URL              |
+| Backend hosting  | Render (free web service, Singapore)          | Deploys FastAPI straight from GitHub in about 5 minutes              |
+| AI               | Claude (`claude-opus-5-5`) via Anthropic SDK  | Used only to read receipt text. The app still works without a key (regex fallback) |
+| Accounts         | Email + password; argon2id; server-side sessions in an HttpOnly cookie | Optional: guests can do the whole check, login is only needed to save/share |
+| Validation       | zod on the frontend, Pydantic on the backend, same rules | zod = instant feedback, Pydantic = the real guard |
+| Security         | Login/signup rate limits, same-origin /api proxy, CSRF origin check, CSP | Details in plan_backend.txt §6 |
+| Map (planned)    | OpenStreetMap via Leaflet, placeholder page only | Nearest ration shops later; no fake shop data now |
+| Visual design    | The team mockup image (described in plan_frontend.txt §2) | One look across all screens |
+| NOT AWS          | —                                             | IAM/VPC/RDS setup eats hours and judges get nothing extra            |
+| NOT Streamlit    | —                                             | It would replace our React UI and can't do the guided multilingual flow |
+
+One change from G's summary: **the discrepancy label (shortfall / late / unrecorded / unclear) is
+decided by fixed rules in Python, not by AI.** The brief requires transparent classification, and
+"the AI decided it's a shortfall" is hard to defend in front of judges. AI does only one job:
+turning messy receipt text into suggested fields.
+
+One change from the frontend notes in context.txt: **the calculator lives in the backend only.**
+The frontend does no arithmetic. It shows what /api/calculate returns, which gives us one source
+of truth. Section 7 of context.txt still describes the math correctly. Only its location changes.
+
+
+## 2. Architecture
+
+    Browser — React on Vercel. It calls /api/* on its OWN domain; Vercel forwards to Render.
+      | keeps the whole "case" in React state (+ localStorage draft) while the user edits
+      |
+      |-- /api/auth/* ---------------> FastAPI --> users + sessions (argon2id, HttpOnly cookie, rate limits)
+      |-- /api/shops/nearby ---------> FastAPI --> placeholder: "planned", [] (map = OSM tiles in browser)
+      |
+      |-- POST /api/receipt/parse --> FastAPI --> Claude: segments the text into fields
+      |                                      \--> regex fallback (no key / timeout / bad output)
+      |                                      --> Python normalises numbers + dates (no AI)
+      |                                      <-- SUGGESTIONS only; the user must confirm
+      |
+      |-- POST /api/calculate ------> FastAPI --> engine/ (units, calculator, classifier)
+      |                                          pure Python, integer base units, NO AI
+      |
+      \-- /api/cases, /api/reports --> FastAPI --> Postgres (Neon): saved cases + report snapshots
+
+
+## 3. Golden rules (put these on the whiteboard)
+
+1. AI only suggests. Only records with status "confirmed" go into the math.
+2. All math lives in backend/app/engine. Quantities become integers in grams, ml or pieces
+   (Decimal → int). No floats anywhere.
+3. Apply only the rules the user entered. If an item has no rule, it is "unclear". We never
+   guess a rule.
+4. Never invent evidence. No receipt means the report says "no receipt provided".
+5. Use neutral words only. Banned in any UI or report text: fraud, theft, steal/stole, cheat,
+   scam, corrupt, embezzle, illegal, black market, guilty (plus the Hindi and Marathi
+   equivalents listed in plan_deployment.txt). CI fails if one of these appears.
+   Write disclaimers without them too: "The reason for this difference has not been established."
+6. The backend returns codes and numbers. The frontend turns them into sentences in en/hi/mr.
+7. Differences are always shown with their sign and explained. Receiving MORE than expected is
+   not an error either.
+
+
+## 4. Who owns what
+
+| Person | Owns                                                                                           |
+|--------|------------------------------------------------------------------------------------------------|
+| M      | Theme from the mockup, component library, i18n, router, API client + mocks, Home, Report, Login/Signup (zod), saved checks |
+| A      | Entry wizard (zod schemas): family + period, rules, records, receipt paste → confirm, review; /shops map placeholder |
+| G      | Neon DB + all tables, schemas.py (API contract), calculation engine + classifier + tests, cases/reports API with ownership checks |
+| N (me) | Repo scaffold, git, CI, deploys + Vercel proxy + security headers, auth + rate limiting + security tests, receipt parser, demo |
+
+Single owners for shared things, to avoid merge fights:
+  - API contract (plan_backend.txt §2 / backend/app/schemas.py): G. To change it, post in team
+    chat AND update the file in the same PR.
+  - frontend/src/App.jsx and the state shape: M.
+  - Merging to main: N (or self-merge once CI is green if N is busy).
+
+
+## 5. Timeline (T = minutes from start)
+
+| When       | M                                  | A                                  | G                                   | N                                    |
+|------------|------------------------------------|------------------------------------|-------------------------------------|--------------------------------------|
+| 0:00–0:30  | Read plans, agree on the contract and demo data. Clone the repo as soon as N pushes the scaffold. | ← same             | Write schemas.py from §2 FIRST      | Push monorepo scaffold (ideally done before the event) |
+| 0:30–2:30  | Theme + components (mockup), header, router, api/client + mocks (by 1:15), Home, Report on mocks | zod case schemas, wizard steps 1–3, receipt paste → suggestion → confirm (mock) | Neon + all tables; units → calculator → classifier with tests | CI, Vercel proxy + Render + hello deploy, regex parser + /api/receipt/parse, start auth |
+| **2:30**   | **CHECKPOINT 1 (10 min):** /api/calculate and /api/receipt/parse are live. Frontend flips VITE_USE_MOCKS=false. |
+| 2:30–4:00  | Real API, report sentences en/hi/mr, copy + print; from 3:30 Login/Signup + save/share | Review step, real parse API, entry translations, then the /shops map placeholder | cases + reports endpoints with ownership checks, fix contract mismatches | Auth + rate limits + security tests (live by 3:30), then the Claude extractor |
+| **4:00**   | **CHECKPOINT 2:** the full demo scenario works on the DEPLOYED URL.                                          |
+| **4:30**   | **FEATURE FREEZE.** Only bug fixes after this.                                                               |
+| 4:30–5:30  | Mobile, print, Devanagari overflow, accessibility | Edge-case validation, all 3 languages | Extra engine tests from bugs found | Smoke tests, tag release, backup recording |
+| 5:30–6:00  | Rehearse the demo (2 runs), README, warm up the backend 3 min before presenting                            |
+
+
+## 6. Demo scenario (used in mocks, tests and the live demo)
+
+Use a period that has ALREADY ENDED, so "shortfall" is allowed. If the period is still running,
+the engine correctly says "unclear: period not ended", which makes a weaker demo.
+
+  Members: 4
+  Period:  2026-09-01 to 2026-09-30
+  Rules:   Rice  — 5 kg per member
+           Wheat — 2.5 kg per member      (shows exact decimal math)
+  Records:
+    d1  Rice   8 kg  2026-09-03  pasted text "Rice 8kg recvd 03/09 Rcpt#101" → AI suggestion → confirmed
+    d2  Rice   6 kg  2026-09-20  Receipt #145, typed manually
+    d3  Wheat 10 kg  2026-09-05  note only: "Collected at shop, no receipt given"
+  Optional: paste "Sugar 1kg 12/09". There is no Sugar rule, so it shows as unclear and is not counted.
+
+  Expected result:
+    Rice:  4 × 5 kg = 20 kg | 8 kg + 6 kg = 14 kg | 20 kg − 14 kg = 6 kg   → shortfall
+    Wheat: 4 × 2.5 kg = 10 kg | 10 kg | 10 kg − 10 kg = 0 kg                → no difference
+    Evidence: 2 records with a receipt number, 1 with pasted receipt text, 1 note-only
+
+  Report sentence (Rice):
+    "Confirmed records for Rice total 14 kg against an expected entitlement of 20 kg for
+     1–30 Sep 2026, a difference of 6 kg. The reason for this difference has not been established."
+
+  Demo talking points: (1) the AI suggestion needs user confirmation; (2) the date "03/09" is
+  ambiguous and gets resolved using the period, with the reason shown; (3) line-by-line math;
+  (4) evidence for every line; (5) switch to Hindi/Marathi; (6) neutral wording; (7) print.
+
+
+## 7. Definition of done (whole team)
+
+- [ ] The demo scenario works end to end on the deployed URL, on a phone and a laptop.
+- [ ] Language switch covers every screen in en/hi/mr.
+- [ ] Unconfirmed suggestions never change the totals.
+- [ ] Every report line shows its evidence, or says "no receipt provided".
+- [ ] Engine + parser tests pass in CI. The neutral-language check passes.
+- [ ] Receipt reading still works with ANTHROPIC_API_KEY removed (regex fallback).
+- [ ] The report prints and saves as PDF cleanly.
+- [ ] The guest flow works without an account. Signup/login work, and a saved case is visible only to its owner.
+- [ ] Login lockout after 5 failures; the session cookie is HttpOnly; security headers are present.
+- [ ] /shops shows the OSM map (with attribution) and "coming soon", with no invented shops.
+- [ ] Screens match the mockup.
+
+
+## 8. Cut list (if behind, drop features in this order)
+
+1. Map placeholder → just the Home banner "coming soon" with no map page.
+2. "late" label and the due-by date field.
+3. Editing a record (keep add + delete).
+4. Claude extractor (keep the regex parser).
+5. My saved checks list (keep save + share link).
+6. Accounts + saving as a whole. The guest flow via /api/calculate is the product.
+   If auth ships, ALL of plan_backend.txt §6 ships with it. Never ship a login without the
+   rate limits and cookie flags.
+NEVER cut: confirm-before-count, line-by-line math, evidence per record, neutral wording,
+the 3 languages.

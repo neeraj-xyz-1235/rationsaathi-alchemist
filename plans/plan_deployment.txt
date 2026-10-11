@@ -1,0 +1,208 @@
+# Deployment + Git Plan — N
+
+Stack: GitHub monorepo → Vercel (frontend) + Render (backend) + Neon (Postgres). All free tiers.
+Pick Singapore for both Render and Neon. It is the closest region to India.
+
+
+## 1. Why this stack (for the README / judges)
+
+  - Vercel: zero-config Vite builds, a preview URL per PR, a global CDN.
+  - Render: runs our FastAPI app unchanged, auto-deploys from main, has a health check.
+  - Neon: managed Postgres, no setup. Details in plan_db_schema.txt.
+  - Not AWS: EC2/ALB/RDS/IAM setup costs hours of a 6-hour event and judges get nothing extra.
+  - Not Streamlit: it can't host our React UI.
+  Known trade-off: the Render free tier sleeps after ~15 min idle, and the first request then
+  takes ~30–60 s. Fix: warm it up before the demo (§7), and the frontend shows a "starting
+  server" message.
+
+
+## 2. Repo scaffold (do this BEFORE the event if allowed, otherwise in the first 30 min)
+
+rationsaathi-alchemist/
+  frontend/                 Vite + React + Tailwind      (M, A)
+  backend/                  FastAPI                      (G, N)
+  plans/                    these files
+  .github/workflows/ci.yml
+  .gitignore  .gitattributes  README.md
+
+Frontend:
+  npm create vite@latest frontend -- --template react
+  cd frontend && npm install
+  npm install -D tailwindcss @tailwindcss/vite
+  npm install lucide-react
+  vite.config.js:  import tailwindcss from '@tailwindcss/vite'  →  plugins: [react(), tailwindcss()]
+  src/index.css:   @import "tailwindcss";
+  npm install react-router-dom zod react-hook-form @hookform/resolvers leaflet react-leaflet
+  frontend/.env.example:   VITE_USE_MOCKS=true
+  vite.config.js dev proxy, so the browser only ever talks to its own origin (needed for the
+  login cookie, see plan_backend.txt §6.2):
+    server: { proxy: { '/api': 'http://localhost:8000' } }
+  Create empty folders/files from plan_frontend.txt §3 so M and A don't collide on creation.
+
+Backend:
+  backend/app/main.py with FastAPI(), CORS, GET /api/health → {"status": "ok"}
+  backend/requirements.txt (list in plan_backend.txt §1), backend/.env.example
+  Empty package folders: app/engine, app/parser, app/db, app/routers, tests/
+
+.gitignore:
+  node_modules/  dist/  .env  .env.local  .venv/  __pycache__/  *.pyc  *.db  .pytest_cache/  .DS_Store
+
+.gitattributes: the current working copy has a typo on line 1 ("on# Auto detect..."). Restore
+it to "# Auto detect text files and perform LF normalization" and keep "* text=auto". We're on
+Windows, so this keeps line endings sane.
+
+GitHub settings:
+  - Settings → Collaborators: add M, A, G.
+  - Settings → Branches → rule for main: require a pull request + require the "CI" status check
+    to pass. No required reviewers (too slow for a hackathon).
+
+
+## 3. Git workflow (share this with everyone)
+
+  - main is always deployable. Vercel and Render auto-deploy from main.
+  - One branch per task: m/home-screen, a/entry-wizard, g/engine, n/receipt-parser, ...
+  - Small PRs (≤ 1 hour of work). Squash-merge once CI is green.
+  - Before pushing:  git pull --rebase origin main
+  - Commit often, push at least every hour. Nobody sits on unpushed work at a checkpoint.
+  - Conflict hot spots, each with a single owner:
+      frontend/src/App.jsx → M      backend/app/schemas.py → G
+      package.json / requirements.txt → announce in chat before adding a dependency
+      Translations are split per screen (plan_frontend.txt §4), so M and A never edit the same file.
+  - Never commit .env files or keys. If a key leaks, rotate it immediately in the provider dashboard.
+
+
+## 4. CI — .github/workflows/ci.yml
+
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - run: pytest -q
+      - name: No floats in the engine
+        run: "! grep -rn 'float(' app/engine"
+      - name: Known-vulnerable dependencies
+        run: pip install pip-audit && pip-audit -r requirements.txt
+  frontend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22" }
+      - run: npm ci
+      - run: npm run build
+      - run: node scripts/check-i18n.js        # every key exists in en, hi and mr (M writes this)
+      - run: npm audit --audit-level=high --omit=dev
+      - name: No raw HTML injection
+        run: "! grep -rn 'dangerouslySetInnerHTML' src"
+  neutral-language:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Banned words in UI/report text
+        run: |
+          ! grep -rniE "fraud|theft|\bsteal|\bstole|cheat|scam|corrupt|embezzl|illegal|black.?market|guilty|धोखा|चोरी|घोटाला|घोटाळा|भ्रष्ट|गबन|ठगी|अवैध|फसवणूक|अपहार|बेकायदेशीर" frontend/src/i18n backend/app
+
+The banned-word list goes in the README too. Ask a Hindi/Marathi speaker on the team to extend it.
+
+
+## 5. Deploy steps
+
+### 5.1 Neon (with G): see plan_db_schema.txt §5. The output is DATABASE_URL.
+
+### 5.2 Backend → Render
+  New → Web Service → connect the GitHub repo
+    Root Directory:  backend
+    Runtime:         Python 3
+    Build Command:   pip install -r requirements.txt
+    Start Command:   uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    Region:          Singapore         Plan: Free
+    Health Check:    /api/health
+  Environment:
+    PYTHON_VERSION     3.12.7
+    DATABASE_URL       (from Neon, pooled, postgresql+psycopg://...)
+    ANTHROPIC_API_KEY  (backend ONLY)
+    LLM_MODEL          claude-opus-5-5
+    APP_ORIGIN         https://rationsaathi.vercel.app        (the real Vercel URL; used for the Origin/CSRF check)
+    COOKIE_SECURE      true
+    ENABLE_DOCS        true   (set to false after the hackathon)
+    SEED_PASSWORD      (only if you run the seed on Render)
+  No CORS: the browser never calls Render directly. Vercel forwards /api/* (§5.3).
+  Check: https://<service>.onrender.com/api/health and /docs
+
+### 5.3 Frontend → Vercel
+  Add New → Project → import the repo
+    Root Directory:  frontend         Framework: Vite (auto-detected)
+  Environment (Production + Preview):
+    VITE_USE_MOCKS     false
+  frontend/vercel.json — the API proxy, the SPA fallback and the security headers:
+    {
+      "rewrites": [
+        { "source": "/api/:path*", "destination": "https://<service>.onrender.com/api/:path*" },
+        { "source": "/((?!api/).*)", "destination": "/index.html" }
+      ],
+      "headers": [{ "source": "/(.*)", "headers": [
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "geolocation=(self), camera=(), microphone=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000" }
+      ]}]
+    }
+  Why the proxy matters: the browser sees ONE site (*.vercel.app), so the HttpOnly session cookie
+  is first-party and isn't blocked as a third-party cookie. It also removes CORS entirely.
+  The CSP allows OSM tiles (map placeholder) and Google Fonts and nothing else. If you add a
+  new external resource, update the CSP or it will be blocked (check the browser console).
+  PR previews get random *.vercel.app URLs, which fail the APP_ORIGIN check for logins. Test
+  auth on production or locally; previews are for UI review.
+  !! VITE_* variables are baked into the public JS bundle. Never put a secret in one.
+
+### 5.4 First deploy target (by T+1:15)
+  A "hello" page on Vercel that calls /api/health (through the Vercel proxy) and shows "ok".
+  Once that works, the proxy, env vars and both pipelines are proven, and the rest is just
+  merging features.
+
+
+## 6. N's timeline
+
+  [before / 0:00–0:30] Scaffold §2, push, post the clone + run commands in team chat
+  [0:30–1:15] CI (§4), Neon + Render + Vercel (§5), hello deploy (§5.4), branch protection
+  [1:15–2:15] Backend: regex parser + /api/receipt/parse (plan_backend.txt §4)
+  [2:30]      Checkpoint 1: both endpoints live on Render; tell M/A to flip VITE_USE_MOCKS=false
+  [2:15–3:30] Auth + security (plan_backend.txt §2.5, §6), incl. tests
+  [3:30–4:15] Claude extractor + fallback; set ANTHROPIC_API_KEY on Render; shops placeholder
+  [4:15–4:30] Merge PRs, watch deploys, fix proxy/env/CSP issues
+  [4:30–6:00] Release checklist (§7), README, backup recording
+
+
+## 7. Release + demo-day checklist
+
+  [ ] main is green in CI and deployed; tag it:  git tag v1.0-demo && git push origin v1.0-demo
+  [ ] /api/health → db "ok", llm "configured"
+  [ ] Full demo scenario (plan_overview.txt §6) on the DEPLOYED URL, on a phone and a laptop,
+      in English, Hindi and Marathi
+  [ ] Fallback verified: with ANTHROPIC_API_KEY unset (locally), parse still returns suggestions
+      with method "regex"
+  [ ] Print → Save as PDF looks clean
+  [ ] Security smoke test on the DEPLOYED site:
+      - signup → logout → login works; refreshing keeps you logged in
+      - DevTools → Application → Cookies: rs_session is HttpOnly + Secure + SameSite=Lax
+      - 6 wrong passwords → "Too many attempts" message
+      - the logged-out guest flow still works end to end
+      - /shops shows the map tiles (no CSP errors in the console) and no shop pins
+      - securityheaders.com on the Vercel URL shows the headers from §5.3
+  [ ] Backup plan: a screen recording of the full flow, plus a local run ready
+      (npm run dev + uvicorn) in case Wi-Fi or Render fails
+  [ ] 3 minutes before presenting: open /api/health to wake Render, then load the site once
+  [ ] README: live URL, one-paragraph pitch, architecture diagram (from plan_overview.txt §2),
+      "AI only suggests, math is plain Python" section, privacy note, how to run locally, team roles

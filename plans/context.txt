@@ -1,0 +1,1260 @@
+official problem statement :-
+P-01 — RationSaathi: Public Distribution Entitlement & Dispute Assistant Domain: 6 — Public Systems & Civic Technology Problem Overview Public distribution schemes provide subsidised goods to eligible households at set quantities for set periods. Collections may be partial or spread over several visits, receipts may be lost or hard to read, and beneficiaries often have no simple way to compare what they are owed with what they received. A clear, evidence-based comparison can resolve simple recording errors and make a grievance easier to review. The calculation itself is simple, but its inputs are messy, and a discrepancy may have benign causes, such as genuine stock shortages. A shortfall is not evidence of wrongdoing, and presenting it as one would cause real harm. The Challenge Build a tool that compares a beneficiary’s expected entitlement with the quantities actually received, and prepares a structured discrepancy report. • Entitlements must be expressed through explicit rules the user enters, such as a quantity per member per period. Apply only the rules provided; do not assume others. • Record distributions, including partial deliveries spread over a period, and calculate shortfalls with exact arithmetic that the user can check line by line. • Link every record to its source, such as a note, receipt reference, or pasted receipt text, and keep that evidence in the report. • Receipt text may be interpreted to extract quantities and dates, and a discrepancy may be classified (for example, shortfall, late, unrecorded, or unclear). Extracted values are suggestions the user must confirm, and arithmetic must not depend on AI. • The report must use neutral language, describe the difference and its evidence, and leave the cause open. It must never state or imply that anyone has committed fraud.
+
+
+simplified by "G" :-
+In simple words
+
+You are building a ration calculator and report maker.
+
+The situation: The government gives families fixed amounts of food each month. For example, 5 kg of rice per person. Families often collect it in pieces, lose receipts, and can’t tell if they got everything they were owed.
+
+Your tool answers one question: “How much should this family have received, how much did they actually get, and what is the difference?”
+
+What the user does, step by step
+Enters the rule. “Rice: 5 kg per person per month.”
+Enters the family. “4 members.”
+Adds what they received, with proof for each entry:
+3rd Oct: 8 kg rice (Receipt #101)
+20th Oct: 6 kg rice (Receipt #145)
+They can also paste messy receipt text like “Rice 8kg recvd 03/10”, and your tool reads the quantity and date out of it.
+Confirms what the tool read from the receipt text. It is only a suggestion until they approve it.
+Gets a report:
+Should have received: 4 × 5 = 20 kg
+Actually received: 8 + 6 = 14 kg
+Difference: 6 kg less than entitled
+Evidence: Receipt #101, Receipt #145
+Type: shortfall
+The report must be neutral
+
+It says “there is a 6 kg difference.” It does not say “someone cheated,” because the cause could be a genuine stock shortage. The cause stays open.
+
+Where the AI goes
+
+You need two small AI parts:
+
+Reading receipt text and pulling out quantity and date.
+Labelling the difference as shortfall, late, unrecorded, or unclear.
+
+The math is plain code, with no AI. The booklet requires this.
+
+What you actually build
+Part	What it is
+Input screen	Rules, family size, distribution records
+Receipt reader	Extracts quantity and date from text (AI, with a simple fallback)
+Calculator	Normal Python arithmetic, shown line by line
+Classifier	Labels each gap
+Report page	Neutral wording, with evidence links
+
+Overall it’s a simple web app: a form, a calculator, a small AI part, and a clean report.
+
+
+frontend context
+# RationSaathi — Frontend Development Plan
+
+## 1. Project Overview
+
+**Project Name:** RationSaathi  
+**Domain:** Public Systems & Civic Technology  
+**Problem Statement:** P-01 — RationSaathi: Public Distribution Entitlement & Dispute Assistant  
+**Frontend Technology:** React.js, Vite, Tailwind CSS  
+**Target Languages:** English, Hindi, Marathi  
+**Development Timeline:** 5–6 hours for the initial frontend prototype  
+**Primary Objective:** Build a simple, accessible, multilingual, and trustworthy web application that helps ration beneficiaries compare their expected entitlement against the quantities they have actually received and generate an evidence-based discrepancy report.
+
+### 1.1 Project Vision
+
+RationSaathi should make it easy for a beneficiary to answer three questions:
+
+1. How much ration should my family receive?
+2. How much ration have we actually received?
+3. Is there any difference between the expected and recorded quantities?
+
+The application should work for people with different levels of digital literacy. Users should not need technical knowledge to navigate the interface, enter ration details, understand calculations, or generate a report.
+
+The interface should prioritize clarity and accessibility over unnecessary complexity.
+
+### 1.2 Core Design Principle
+
+**A user should be able to check their ration entitlement without needing technical knowledge.**
+
+The application must be easy to understand, visually organized, multilingual, responsive, and transparent about how every quantity is calculated.
+
+A discrepancy must never automatically be treated as evidence of fraud or wrongdoing. Reports should describe the recorded quantities, differences, and supporting evidence while leaving the cause open.
+
+---
+
+## 2. Design Direction and Visual Identity
+
+The design should take inspiration from the clean layouts, reusable components, consistent visual hierarchy, polished cards, and responsive interface patterns used in the VisionAttend project.
+
+However, RationSaathi should have its own identity.
+
+VisionAttend uses a futuristic AI-oriented interface. RationSaathi should instead feel trustworthy, welcoming, approachable, and appropriate for a public-service application.
+
+### 2.1 Design Style
+
+- Clean, modern, minimal, and professional.
+- Government-service-oriented visual identity.
+- Large buttons and easily readable text.
+- Familiar icons with clear labels.
+- Rounded cards and generous spacing.
+- Simple forms with visible labels and instructions.
+- Subtle animations and transitions.
+- Mobile-first responsive design.
+- Minimal technical terminology.
+- Consistent layout across all languages.
+
+Avoid excessive gradients, complex dashboards, unnecessary animations, tiny text, crowded layouts, and technical-looking interfaces that may confuse users.
+
+### 2.2 Color Palette
+
+Use a consistent palette throughout the application.
+
+| Element | Color | Hex Code |
+|---|---|---|
+| Primary color | Trust green | #176B45 |
+| Main background | Soft green-white | #F3F7F2 |
+| Card background | White | #FFFFFF |
+| Accent color | Warm amber | #E9A23B |
+| Primary text | Dark charcoal | #1F2937 |
+| Secondary text | Muted gray | #6B7280 |
+| Borders | Light gray | #E5E7EB |
+
+Color usage:
+
+- Green: primary buttons, progress indicators, and positive interface elements.
+- Amber: attention indicators and items requiring review.
+- Gray: secondary information, neutral observations, and supporting text.
+- Red: reserved for actual errors or critical validation problems, not automatically for ration discrepancies.
+
+A shortfall should be displayed neutrally rather than using alarming colors or language that implies misconduct.
+
+### 2.3 Typography
+
+- Use a clean, readable font.
+- Keep body text at approximately 16 px or larger wherever practical.
+- Use clear heading sizes and consistent font weights.
+- Ensure Hindi and Marathi Devanagari characters render correctly.
+- Use a font stack with reliable Devanagari support, such as Noto Sans Devanagari when available.
+- Avoid decorative fonts for essential information.
+
+### 2.4 Component Styling
+
+All pages should use a shared design system.
+
+Reusable components should have consistent:
+
+- Border radius.
+- Spacing.
+- Button height.
+- Typography.
+- Colors.
+- Focus states.
+- Hover states.
+- Disabled states.
+- Validation messages.
+- Loading indicators.
+
+Buttons and important form controls should ideally have a minimum height of 48 px.
+
+---
+
+## 3. Target Users and Accessibility
+
+The application is intended for ration beneficiaries with varying levels of digital literacy.
+
+The interface must not assume that every user is comfortable with websites, forms, English terminology, or technical instructions.
+
+### 3.1 Accessibility Requirements
+
+1. Use large, clearly labelled buttons.
+2. Use explicit form labels instead of relying only on placeholders.
+3. Keep instructions short and direct.
+4. Use icons together with text rather than icons alone.
+5. Provide clear error messages explaining what needs to be corrected.
+6. Support keyboard navigation and visible focus indicators.
+7. Maintain sufficient color contrast.
+8. Avoid unnecessary pop-ups and complicated menus.
+9. Display quantities with their units, such as kg.
+10. Keep the primary action visible and easy to identify.
+11. Do not communicate important information through color alone.
+12. Use simple language and avoid unexplained technical terms.
+
+### 3.2 Guided User Journey
+
+Instead of presenting a complicated dashboard, use a guided, numbered workflow.
+
+The user should move through the following steps:
+
+1. Enter family details and entitlement rules.
+2. Add distribution records and supporting evidence.
+3. Review the calculated entitlement and received quantities.
+4. View, print, or save the discrepancy report.
+
+Each step should have clear Next and Back actions.
+
+The interface should preserve entered information when the user moves between steps.
+
+---
+
+## 4. Multilingual Support
+
+The initial application must support three languages:
+
+- English
+- Hindi
+- Marathi
+
+### 4.1 Language Selector
+
+Add a visible language selector in the header.
+
+Example:
+
+`English | हिंदी | मराठी`
+
+The language selector must remain accessible on all major screens.
+
+When a user changes the language, the interface should immediately update:
+
+- Headings.
+- Buttons.
+- Navigation labels.
+- Form labels.
+- Instructions.
+- Validation messages.
+- Empty states.
+- Report headings.
+- Help text.
+- Status descriptions.
+
+### 4.2 Translation Architecture
+
+Do not create separate React pages for every language.
+
+Create a centralized translation dictionary.
+
+Suggested file:
+
+`src/utils/translations.js`
+
+Example structure:
+
+```javascript
+export const translations = {
+  en: {
+    appName: "RationSaathi",
+    checkRation: "Check Your Ration",
+    expected: "Expected",
+    received: "Received",
+    difference: "Difference",
+    addRecord: "Add Record",
+    viewReport: "View Report",
+    next: "Next",
+    back: "Back",
+    save: "Save",
+    printReport: "Print Report"
+  },
+
+  hi: {
+    appName: "RationSaathi",
+    checkRation: "अपना राशन जाँचें",
+    expected: "मिलना चाहिए",
+    received: "मिला",
+    difference: "अंतर",
+    addRecord: "रिकॉर्ड जोड़ें",
+    viewReport: "रिपोर्ट देखें",
+    next: "आगे",
+    back: "पीछे",
+    save: "सहेजें",
+    printReport: "रिपोर्ट प्रिंट करें"
+  },
+
+  mr: {
+    appName: "RationSaathi",
+    checkRation: "तुमचे रेशन तपासा",
+    expected: "मिळणे अपेक्षित",
+    received: "मिळाले",
+    difference: "फरक",
+    addRecord: "नोंद जोडा",
+    viewReport: "अहवाल पहा",
+    next: "पुढे",
+    back: "मागे",
+    save: "जतन करा",
+    printReport: "अहवाल प्रिंट करा"
+  }
+};
+```
+
+This is an initial example. The final dictionaries must include every visible interface string, with translations reviewed for clarity and natural wording.
+
+### 4.3 Translation Implementation
+
+Maintain the selected language in React state.
+
+Use a translation helper such as:
+
+`t("checkRation")`
+
+The helper should return the translation for the selected language.
+
+Use English as the default language, while allowing the user to switch to Hindi or Marathi at any time.
+
+Do not hardcode interface labels directly into individual components when they should be translated.
+
+### 4.4 Multilingual Considerations
+
+- Use fonts that support Devanagari.
+- Allow text containers to expand for longer translations.
+- Avoid fixed-width buttons that truncate Hindi or Marathi text.
+- Test all three languages on desktop and mobile layouts.
+- Ensure numbers, dates, and quantities remain understandable across languages.
+
+---
+
+## 5. Frontend Pages and Navigation
+
+The initial prototype should contain three main screens.
+
+Avoid building too many pages during the six-hour development window.
+
+### Screen A: Home / Welcome Page
+
+**Purpose:** Introduce the application and help users select their next action.
+
+#### Required elements
+
+1. Header containing the RationSaathi logo and language selector.
+2. Main heading: “Check Your Ration”.
+3. Short explanation of what the application does.
+4. Three large action cards.
+5. A simple “How It Works” section.
+6. A small footer with a neutral informational disclaimer.
+
+#### Main action cards
+
+**Action 1: Check Entitlement**
+
+Allows the user to enter their family's entitlement rules and check the expected ration quantity.
+
+**Action 2: Add Received Ration**
+
+Allows the user to enter distribution details and supporting evidence.
+
+**Action 3: View Report**
+
+Opens the calculation and discrepancy report for the current set of records.
+
+If no data has been entered, the application should guide the user to start the process instead of displaying an empty or misleading report.
+
+#### Suggested components
+
+- `Header`
+- `LanguageSelector`
+- `ActionCard`
+- `HowItWorks`
+- `Footer`
+
+#### Design requirements
+
+- Large, readable heading.
+- Simple introductory text.
+- Three visually distinct but consistent action cards.
+- Familiar icons accompanied by text.
+- Clear primary action.
+- Responsive layout for smaller screens.
+
+---
+
+### Screen B: Entitlement and Distribution Entry
+
+**Purpose:** Collect the information needed to calculate the expected entitlement and recorded distributions.
+
+This screen should follow a guided form layout.
+
+#### Step 1: Family Details
+
+Fields:
+
+- Number of family members.
+- Entitlement period start date.
+- Entitlement period end date.
+- Optional household reference or identifier, if required by the project.
+
+The family size must be a positive integer.
+
+Do not collect unnecessary sensitive personal information for the prototype.
+
+#### Step 2: Entitlement Rules
+
+Allow the user to define the rules explicitly.
+
+Example:
+
+- Item: Rice.
+- Quantity per member: 5 kg.
+- Entitlement period: One month.
+
+For a family of four:
+
+`4 members × 5 kg per member = 20 kg expected entitlement`
+
+The application must apply only the rules entered by the user.
+
+It must not assume government entitlement rules or automatically introduce unverified eligibility criteria.
+
+#### Rule requirements
+
+- Support multiple ration items.
+- Allow users to add and remove rules.
+- Display quantity and unit clearly.
+- Support the relevant entitlement period.
+- Validate positive quantities.
+- Associate each distribution record with the appropriate item and period.
+
+The initial prototype may use a small predefined list of common items, such as rice and wheat, while allowing the user to select or enter an item name.
+
+#### Step 3: Distribution Records
+
+Users must be able to add multiple distribution entries.
+
+Each entry should include:
+
+- Ration item.
+- Quantity received.
+- Distribution date.
+- Receipt reference, if available.
+- Optional note.
+- Optional pasted receipt text.
+- Record source or evidence description.
+
+Example entries:
+
+| Date | Item | Quantity | Evidence |
+|---|---|---:|---|
+| 3 October | Rice | 8 kg | Receipt #101 |
+| 20 October | Rice | 6 kg | Receipt #145 |
+
+The application must support partial deliveries spread across the entitlement period.
+
+The total received quantity must be calculated by summing all confirmed records associated with the relevant item and period.
+
+#### Distribution list behavior
+
+Users should be able to:
+
+- Add a record.
+- Edit a record.
+- Remove a record.
+- Review the entered date and quantity.
+- Review the linked evidence.
+- Correct extraction suggestions before saving them as confirmed records.
+
+Show each entry in a clear card or table, depending on the screen width.
+
+On mobile, prefer stacked cards over a crowded table.
+
+#### Step 4: Receipt Text Input
+
+Provide an optional field where users can paste receipt text.
+
+Example:
+
+`Rice 8kg recvd 03/10`
+
+The receipt reader may suggest:
+
+- Item: Rice.
+- Quantity: 8 kg.
+- Date: 3 October.
+
+The interface must clearly identify these values as suggestions.
+
+Users must review and confirm or correct the extracted values before they become confirmed distribution records.
+
+The original receipt text must be retained as evidence.
+
+If the parser cannot confidently identify a quantity, date, or item, the interface should show an unclear result and request manual entry.
+
+#### Step 5: Review
+
+Before generating the report, display a summary of:
+
+- Family size.
+- Entitlement rules.
+- Entitlement period.
+- Distribution records.
+- Total recorded quantity for each item.
+- Number of records with supporting evidence.
+- Any incomplete or unconfirmed entries.
+
+Allow the user to go back and correct information.
+
+---
+
+### Screen C: Results and Discrepancy Report
+
+**Purpose:** Present a clear calculation and generate a structured report that the user can review, print, or save.
+
+#### Summary cards
+
+Display three prominent summary cards:
+
+1. Expected entitlement.
+2. Total recorded quantity received.
+3. Difference between expected and received quantities.
+
+Example:
+
+- Expected: 20 kg.
+- Received: 14 kg.
+- Difference: 6 kg.
+
+The displayed values must be calculated from the user's confirmed input data, not from hardcoded demonstration values.
+
+#### Calculation breakdown
+
+For the example above:
+
+- Family members: 4.
+- Entitlement rule: 5 kg per member.
+- Expected entitlement: 4 × 5 = 20 kg.
+- Receipt #101: 8 kg.
+- Receipt #145: 6 kg.
+- Total recorded quantity: 8 + 6 = 14 kg.
+- Difference: 20 − 14 = 6 kg.
+
+Show the calculation line by line so that the user can understand how the result was obtained.
+
+#### Evidence section
+
+For every distribution record, show:
+
+- Date.
+- Ration item.
+- Quantity.
+- Receipt reference or note.
+- Original receipt text, when applicable.
+- Whether the values were manually entered or extracted and confirmed.
+
+Every record included in the calculation must be traceable to its source.
+
+Do not imply that a receipt exists when the user has not provided one.
+
+#### Discrepancy classification
+
+The report may use the following classifications:
+
+- **Shortfall:** Recorded quantity is lower than the expected entitlement.
+- **Late:** A distribution was recorded after the relevant expected date or period, based on an explicit date or rule.
+- **Unrecorded:** A receipt or distribution is mentioned in available evidence but has not been represented by a confirmed distribution record.
+- **Unclear:** The available information is insufficient to classify the discrepancy confidently.
+
+Classification rules must be transparent and should not rely on unsupported assumptions.
+
+For example, a shortfall can be calculated from the difference between expected and recorded quantities. However, the application cannot conclude that the difference was caused by misconduct.
+
+A distribution should not be labelled late unless an applicable expected date or deadline has been provided or defined.
+
+#### Neutral report language
+
+Example:
+
+“The recorded distributions total 14 kg against an expected entitlement of 20 kg, resulting in a recorded difference of 6 kg. The reason for this difference has not been established.”
+
+The report must never state or imply that a person has committed fraud, theft, or wrongdoing.
+
+#### Report actions
+
+Provide the following actions:
+
+- Print Report.
+- Save as PDF using the browser's print dialog.
+- Copy Report Text.
+- Return to Edit Details.
+
+For the initial prototype, browser printing and copying report text are sufficient.
+
+Use print-specific CSS to hide navigation and unnecessary controls when printing.
+
+---
+
+## 6. Core Frontend Functionality
+
+### 6.1 State Management
+
+Use React state to manage the current user journey and entered information.
+
+The frontend should store:
+
+- Selected language.
+- Current screen or workflow step.
+- Family details.
+- Entitlement rules.
+- Entitlement period.
+- Distribution records.
+- Receipt extraction suggestions.
+- Confirmation status for extracted values.
+- Calculation results.
+- Report classification.
+- Report content.
+
+For the initial prototype, ordinary React state and shared state in the parent component are sufficient.
+
+Do not introduce a complex state-management library unless the existing project already requires one.
+
+### 6.2 Data Flow
+
+The intended data flow is:
+
+1. User enters family information.
+2. User defines entitlement rules.
+3. User adds distribution records.
+4. Receipt text is optionally parsed.
+5. User reviews and confirms suggested values.
+6. Confirmed records are passed to the calculator.
+7. The calculator generates exact, line-by-line results.
+8. The classification logic evaluates the available information.
+9. The report component displays the result and evidence.
+10. The user prints or copies the report.
+
+Only confirmed and valid distribution records should contribute to the official calculation shown in the report.
+
+### 6.3 Form Validation
+
+Implement validation for:
+
+- Missing family size.
+- Zero or negative family size.
+- Missing entitlement rule.
+- Zero or negative entitlement quantity.
+- Missing ration item.
+- Missing distribution date.
+- Zero or negative distribution quantity, unless an explicitly supported correction workflow requires it.
+- Invalid or unsupported date formats.
+- Missing entitlement period.
+- Unconfirmed receipt extraction suggestions.
+- Records that fall outside the relevant period.
+
+Validation messages must be displayed near the relevant field and translated into all supported languages.
+
+Do not silently discard invalid input.
+
+### 6.4 Handling Missing Evidence
+
+A distribution record may not always have a receipt.
+
+The interface should allow a user to provide an alternative source, such as a note or reference.
+
+If evidence is missing:
+
+- Do not invent a receipt number.
+- Do not claim that the entry is receipt-backed.
+- Display the evidence status accurately.
+- Allow the report to explain that the entry was manually recorded or that its source is unclear.
+
+### 6.5 Handling Partial Deliveries
+
+A household may receive ration in multiple deliveries during the same period.
+
+The calculator must aggregate all confirmed distributions for each item and period.
+
+Example:
+
+- Expected entitlement: 20 kg.
+- First delivery: 8 kg.
+- Second delivery: 6 kg.
+- Total recorded: 14 kg.
+- Difference: 6 kg.
+
+Do not treat the first partial delivery as the final result if additional deliveries have been recorded.
+
+The report should make clear that the calculation reflects the records available at the time it was generated.
+
+---
+
+## 7. Calculation Logic
+
+The calculation must use ordinary application code. AI must not calculate, modify, or independently determine the final arithmetic result.
+
+### 7.1 Expected Entitlement
+
+For a per-member entitlement rule:
+
+Expected quantity = Number of family members × Quantity per member for the relevant period.
+
+Example:
+
+`4 × 5 kg = 20 kg`
+
+For more complex rules, the calculator should apply only the explicit rule provided by the user.
+
+### 7.2 Total Recorded Quantity
+
+For each ration item:
+
+Total received = Sum of all confirmed distribution quantities associated with that item and entitlement period.
+
+Example:
+
+`8 kg + 6 kg = 14 kg`
+
+### 7.3 Difference
+
+Difference = Expected entitlement − Total recorded quantity.
+
+Example:
+
+`20 kg − 14 kg = 6 kg`
+
+Interpretation:
+
+- Positive difference: recorded quantity is lower than expected.
+- Zero difference: recorded quantity equals expected entitlement.
+- Negative difference: recorded quantity exceeds expected entitlement.
+
+A negative difference should not automatically be treated as an error or wrongdoing. The report should display the actual signed difference and provide a clear explanation.
+
+### 7.4 Exact Arithmetic
+
+Do not rely on unrounded floating-point arithmetic for quantities.
+
+Prefer integer base units where possible.
+
+For example, store quantities in grams when the supported precision is one gram, or use a decimal arithmetic library when fractional quantities require a different precision.
+
+The same units must be used when adding, subtracting, and comparing quantities.
+
+Do not silently round values in a way that changes the reported difference.
+
+### 7.5 Suggested Calculator File
+
+`src/utils/calculator.js`
+
+This file should contain pure calculation functions for:
+
+- Calculating expected entitlement.
+- Summing confirmed distributions.
+- Calculating the difference.
+- Generating line-by-line calculation details.
+- Grouping records by ration item and entitlement period.
+
+Keep calculation logic separate from the UI components so that it can be tested independently.
+
+---
+
+## 8. AI and Receipt Processing
+
+The frontend should support AI-assisted receipt interpretation without making AI responsible for final calculations.
+
+### 8.1 Receipt Reader
+
+The receipt reader accepts pasted text and returns suggested fields.
+
+Example input:
+
+`Rice 8kg recvd 03/10`
+
+Possible extracted values:
+
+- Item: Rice.
+- Quantity: 8 kg.
+- Date: 3 October.
+
+The extraction mechanism may use a backend AI endpoint, a local parser, or both.
+
+The frontend should not assume that AI extraction is always correct.
+
+### 8.2 Confirmation Workflow
+
+The user must be able to:
+
+1. Paste the receipt text.
+2. Request extraction.
+3. Review the suggested item, quantity, and date.
+4. Edit incorrect fields.
+5. Confirm the values.
+6. Save the record.
+
+Unconfirmed suggestions must not be included in the final calculation.
+
+### 8.3 Fallback Parser
+
+Create:
+
+`src/utils/receiptParser.js`
+
+The fallback parser should use simple patterns to identify common quantities and dates from pasted text.
+
+For the first prototype, support a limited range of formats and clearly indicate when parsing is uncertain.
+
+For example:
+
+- `Rice 8kg recvd 03/10`
+- `Wheat 5 kg received 12/10`
+
+The parser should not assume a date format when the interpretation is ambiguous. For example, `03/10` could represent different dates depending on the format and year.
+
+Request clarification when the date or quantity cannot be reliably interpreted.
+
+### 8.4 AI Integration Boundary
+
+The frontend should be designed so the receipt extraction service can be connected later.
+
+A possible API interface is:
+
+`POST /api/receipt/parse`
+
+The request may contain the pasted receipt text and relevant context.
+
+The response should contain suggested item, quantity, unit, date, and any confidence or ambiguity information supported by the backend.
+
+This endpoint is a proposed interface, not an assumption that the backend has already implemented it.
+
+During frontend development, use a local mock function or fallback parser until the real endpoint is available.
+
+### 8.5 Classification
+
+The frontend may display a classification returned by the backend or calculate it using transparent deterministic rules.
+
+The classification must be based on explicit information and must not assert fraud or wrongdoing.
+
+AI may help interpret ambiguous text, but it must not override confirmed user data or the deterministic calculation.
+
+---
+
+## 9. Recommended Technology Stack
+
+Use the existing React/Vite workflow and familiar frontend tools.
+
+| Technology | Purpose |
+|---|---|
+| React | Component-based user interface |
+| Vite | Development server and build tooling |
+| Tailwind CSS | Responsive styling and design system |
+| React state and hooks | Form state, language selection, and workflow |
+| React Router, if needed | Navigation between screens |
+| Lucide React, if already available | Consistent interface icons |
+| Browser Print API | Print report or save as PDF |
+| JavaScript utility functions | Calculation and fallback receipt parsing |
+
+Do not introduce a new component framework solely for this prototype.
+
+Reuse existing project dependencies wherever possible.
+
+If React Router is not already installed, a simple state-driven three-screen workflow is acceptable for the initial demo.
+
+---
+
+## 10. Recommended Folder Structure
+
+```text
+src/
+├── components/
+│   ├── Header.jsx
+│   ├── Footer.jsx
+│   ├── LanguageSelector.jsx
+│   ├── ActionCard.jsx
+│   ├── FormField.jsx
+│   ├── Button.jsx
+│   ├── DistributionList.jsx
+│   ├── ReceiptTextInput.jsx
+│   ├── SummaryCard.jsx
+│   ├── CalculationBreakdown.jsx
+│   ├── EvidenceList.jsx
+│   └── ReportActions.jsx
+│
+├── pages/
+│   ├── Home.jsx
+│   ├── RationEntry.jsx
+│   └── Report.jsx
+│
+├── utils/
+│   ├── translations.js
+│   ├── calculator.js
+│   ├── receiptParser.js
+│   └── validation.js
+│
+├── App.jsx
+├── index.css
+└── main.jsx
+```
+
+This structure is a starting point. Existing project conventions should take precedence if the repository already has an established architecture.
+
+### Component responsibilities
+
+**Header.jsx**
+- Application identity.
+- Language selector.
+- Optional simple navigation.
+
+**LanguageSelector.jsx**
+- Displays supported languages.
+- Updates the selected language.
+
+**Home.jsx**
+- Welcome screen.
+- Main actions.
+- How-it-works section.
+
+**RationEntry.jsx**
+- Family details.
+- Entitlement rules.
+- Distribution records.
+- Receipt input and review.
+
+**DistributionList.jsx**
+- Lists distribution entries.
+- Allows editing and removal.
+
+**ReceiptTextInput.jsx**
+- Accepts receipt text.
+- Displays extraction suggestions.
+- Supports confirmation and correction.
+
+**Report.jsx**
+- Displays calculation results.
+- Shows discrepancy classification.
+- Presents evidence and report wording.
+
+**calculator.js**
+- Performs deterministic arithmetic.
+
+**receiptParser.js**
+- Provides fallback receipt extraction.
+
+**translations.js**
+- Stores all interface translations.
+
+---
+
+## 11. Six-Hour Frontend Development Schedule
+
+The target is a working, integrated prototype in approximately six hours.
+
+The time allocation is a practical target rather than a guarantee. Prioritize a complete user journey over decorative details.
+
+### Hour 1: Project Setup and Design System
+
+Tasks:
+
+1. Inspect the existing frontend repository.
+2. Set up or verify the React/Vite application.
+3. Confirm Tailwind CSS is working.
+4. Create the shared color palette and typography.
+5. Build the header and footer.
+6. Implement the language selector.
+7. Create reusable button, card, and form-field components.
+8. Verify that the app renders correctly.
+
+**Deliverable:** A working application shell with a consistent design system.
+
+### Hour 2: Home Screen and Navigation
+
+Tasks:
+
+1. Build the welcome screen.
+2. Add the application title and introductory message.
+3. Create the three main action cards.
+4. Add the How It Works section.
+5. Connect the navigation between screens.
+6. Implement language switching on the home screen.
+7. Make the layout responsive.
+
+**Deliverable:** A polished welcome screen with functional navigation.
+
+### Hour 3: Entitlement Form
+
+Tasks:
+
+1. Build the family-details form.
+2. Add the entitlement period fields.
+3. Implement explicit entitlement rules.
+4. Support multiple ration items.
+5. Allow rules to be added and removed.
+6. Add input validation.
+7. Store the entered data in React state.
+8. Add Next and Back navigation.
+
+**Deliverable:** Users can define family size and entitlement rules.
+
+### Hour 4: Distribution Records and Receipt Input
+
+Tasks:
+
+1. Build the distribution entry form.
+2. Add date, item, quantity, and evidence fields.
+3. Support multiple deliveries.
+4. Allow records to be edited and removed.
+5. Add pasted receipt text input.
+6. Implement a basic fallback parser.
+7. Display extraction suggestions.
+8. Require user confirmation before saving extracted values.
+9. Preserve the original receipt text.
+
+**Deliverable:** Users can enter multiple distribution records and review receipt extraction suggestions.
+
+### Hour 5: Calculator and Report
+
+Tasks:
+
+1. Implement expected entitlement calculations.
+2. Sum confirmed distribution records.
+3. Calculate item-wise differences.
+4. Display line-by-line arithmetic.
+5. Add discrepancy classification.
+6. Display receipt evidence and source references.
+7. Write neutral report language.
+8. Add Copy Report and Print Report actions.
+9. Verify the example scenario.
+
+**Deliverable:** A complete calculation and discrepancy report.
+
+### Hour 6: Integration and Testing
+
+Tasks:
+
+1. Test the complete workflow.
+2. Test English, Hindi, and Marathi.
+3. Test multiple distribution records.
+4. Verify arithmetic and quantity units.
+5. Test invalid and incomplete inputs.
+6. Check evidence references.
+7. Test report printing.
+8. Check mobile responsiveness.
+9. Fix critical visual and functional bugs.
+10. Prepare the demonstration scenario.
+
+**Deliverable:** A presentable, functional hackathon prototype.
+
+### Five-Hour Alternative
+
+If only five hours are available:
+
+- Spend approximately 45 minutes on project setup and shared styling.
+- Spend approximately 45 minutes on the home screen and navigation.
+- Spend 60 minutes on the entitlement form.
+- Spend 60 minutes on distribution records and receipt input.
+- Spend 75 minutes on calculation and report generation.
+- Reserve 45 minutes for integration and testing.
+
+Do not remove testing altogether to make room for visual polish.
+
+---
+
+## 12. Definition of Done
+
+The frontend prototype is considered complete when the following requirements are satisfied.
+
+### User Interface
+
+- [ ] The welcome screen is implemented.
+- [ ] The three main actions are available.
+- [ ] Navigation between the screens works.
+- [ ] Shared components use a consistent design.
+- [ ] The interface is responsive on desktop and mobile.
+- [ ] Buttons and fields have accessible sizes.
+- [ ] Important information is not communicated by color alone.
+
+### Multilingual Support
+
+- [ ] English is supported.
+- [ ] Hindi is supported.
+- [ ] Marathi is supported.
+- [ ] Language switching updates all major interface text.
+- [ ] Devanagari text displays correctly.
+- [ ] Longer translations do not break the layout.
+
+### Entitlement and Distribution
+
+- [ ] Family size can be entered.
+- [ ] Explicit entitlement rules can be added.
+- [ ] Multiple ration items are supported.
+- [ ] Multiple distribution records can be entered.
+- [ ] Records can be edited and removed.
+- [ ] Dates and quantities are validated.
+- [ ] Partial deliveries are aggregated correctly.
+
+### Receipt Reader
+
+- [ ] Receipt text can be pasted.
+- [ ] The fallback parser can recognize supported formats.
+- [ ] Extracted values are presented as suggestions.
+- [ ] Users can edit and confirm suggestions.
+- [ ] Unconfirmed suggestions are excluded from calculations.
+- [ ] Original receipt text is preserved.
+- [ ] Ambiguous dates and quantities are handled safely.
+
+### Calculator
+
+- [ ] Expected entitlement is calculated from explicit rules.
+- [ ] Confirmed deliveries are summed correctly.
+- [ ] Differences are calculated using deterministic code.
+- [ ] Arithmetic is displayed line by line.
+- [ ] Quantities use consistent units and exact arithmetic.
+- [ ] Negative and zero differences are handled correctly.
+
+### Report
+
+- [ ] Expected, received, and difference values are visible.
+- [ ] Supporting evidence is displayed.
+- [ ] Discrepancies are classified using transparent rules.
+- [ ] Neutral report language is used.
+- [ ] No one is accused of fraud or wrongdoing.
+- [ ] Copy Report works.
+- [ ] Print Report works.
+- [ ] The report accurately reflects the confirmed input data.
+
+### Final Validation
+
+- [ ] No major console errors remain.
+- [ ] The complete demonstration journey works.
+- [ ] Invalid input does not silently produce misleading results.
+- [ ] The application does not display fabricated evidence.
+- [ ] The interface is ready for the hackathon demonstration.
+
+---
+
+## 13. Demonstration Scenario
+
+Use one consistent scenario to test the entire application.
+
+### Input
+
+Family size: 4 members.
+
+Entitlement rule:
+
+Rice = 5 kg per member for the specified month.
+
+Distribution records:
+
+- 3 October: 8 kg of rice, Receipt #101.
+- 20 October: 6 kg of rice, Receipt #145.
+
+### Expected Result
+
+Expected entitlement:
+
+`4 × 5 kg = 20 kg`
+
+Recorded distribution total:
+
+`8 kg + 6 kg = 14 kg`
+
+Difference:
+
+`20 kg − 14 kg = 6 kg`
+
+Classification:
+
+Shortfall, if the records establish that the applicable entitlement period has ended and the confirmed quantities are complete enough for that comparison.
+
+Otherwise, the report should clearly state that the current recorded total is below the expected amount and that the final period outcome may be unresolved.
+
+### Example Report
+
+**RationSaathi — Entitlement Discrepancy Report**
+
+- Expected entitlement: 20 kg.
+- Total recorded quantity: 14 kg.
+- Recorded difference: 6 kg.
+- Supporting records: Receipt #101 and Receipt #145.
+
+**Observation:**
+
+“The recorded distributions total 14 kg against an expected entitlement of 20 kg, resulting in a recorded difference of 6 kg. The reason for this difference has not been established.”
+
+This demonstration shows the core value of the application: understandable calculations, traceable evidence, and neutral reporting.
+
+---
+
+## 14. Scope Boundaries and Priorities
+
+### Must Have
+
+These features are essential for the initial prototype:
+
+1. Three-screen user journey.
+2. English, Hindi, and Marathi interface.
+3. Explicit entitlement rules.
+4. Multiple distribution records.
+5. Deterministic entitlement calculations.
+6. Line-by-line calculation breakdown.
+7. Evidence references.
+8. Receipt text input.
+9. Editable extraction suggestions.
+10. Neutral discrepancy report.
+11. Copy and print report actions.
+12. Responsive and accessible interface.
+
+### Should Have
+
+Implement these if time permits:
+
+1. Better receipt parsing.
+2. More detailed validation.
+3. Improved empty states.
+4. Confirmation summaries.
+5. Better print formatting.
+6. Visual indicators for incomplete records.
+7. A sample demonstration mode.
+
+### Defer Until After the Prototype
+
+Avoid spending the initial six hours on:
+
+- A complex analytics dashboard.
+- User authentication and role management.
+- A large administrative portal.
+- Advanced charts that do not support the core calculation.
+- A chatbot.
+- Complex animations.
+- Full OCR for uploaded receipt images.
+- A database layer implemented solely for frontend demonstration.
+- Elaborate settings pages.
+- Unnecessary external API integrations.
+
+The initial frontend can use React state and a controlled demo dataset. Backend persistence and actual AI receipt extraction can be connected when those services are available.
+
+---
+
+## 15. Implementation Principles
+
+The following principles should guide all frontend development.
+
+1. **Simplicity first:** Every screen must have an obvious purpose.
+2. **Accessibility by design:** Build for users with different levels of digital literacy.
+3. **Multilingual from the beginning:** Do not postpone translations until the end.
+4. **Deterministic calculations:** Never delegate final arithmetic to AI.
+5. **Evidence traceability:** Every distribution record must identify its source or explicitly indicate that evidence is missing.
+6. **User confirmation:** AI-extracted values must be reviewed before they are used.
+7. **Neutral reporting:** A numerical difference is not proof of wrongdoing.
+8. **Responsive design:** All essential workflows must work on smaller screens.
+9. **Reusable components:** Maintain a consistent UI without duplicating code.
+10. **Time-boxed development:** Complete the working user journey before adding optional polish.
+11. **Graceful uncertainty:** If a receipt, date, quantity, or classification is unclear, ask for clarification rather than inventing information.
+12. **Clear ownership of logic:** Keep the UI, calculation logic, parsing logic, and backend integration separate.
+
+---
+
+## 16. Final Development Strategy
+
+The recommended implementation order is:
+
+1. Build the shared design system.
+2. Create the welcome screen.
+3. Implement the guided entitlement form.
+4. Add distribution records and evidence handling.
+5. Build the receipt-text suggestion and confirmation interface.
+6. Implement the deterministic calculator.
+7. Build the discrepancy report.
+8. Complete translations and responsive styling.
+9. Test the complete workflow.
+10. Integrate the actual backend receipt extraction service when available.
+
+The first milestone should be a working end-to-end flow with demo data. Once the user can enter entitlement rules, record multiple deliveries, view the correct calculation, and generate a neutral report, the frontend has achieved its primary objective.
+
+**Final goal:** Deliver a polished, accessible, multilingual RationSaathi prototype that demonstrates a complete and trustworthy ration entitlement comparison workflow within the six-hour development window.

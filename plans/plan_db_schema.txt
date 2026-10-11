@@ -1,0 +1,195 @@
+# Database Plan — G
+
+## 1. Choice: PostgreSQL on Neon (production) + SQLite (local dev)
+
+Why Postgres:
+  - The data is relational: a user has cases, a case has rules, and a case has records that
+    point at rules.
+  - CHECK constraints guard the data rules (members > 0, quantity > 0, status values, ...).
+  - JSONB is a good fit for frozen report snapshots and the parser's raw suggestion.
+
+Why Neon (managed Postgres):
+  - Free tier, nothing to install, a web SQL editor for quick inspection.
+  - Region: AWS Singapore (ap-southeast-1), the same region we pick for Render, so queries are fast.
+  - It scales to zero when idle and wakes in about a second.
+
+Why SQLite locally:
+  - With DATABASE_URL unset, the backend uses sqlite:///./dev.db, so M and A can run the backend
+    without any setup.
+  - Use portable SQLAlchemy types: Uuid, JSON().with_variant(JSONB, "postgresql"), Date, BigInteger,
+    DateTime(timezone=True).
+
+Not chosen:
+  - MongoDB: our data has fixed relations and needs exactness. No benefit.
+  - Supabase: fine too, but its free projects pause after a week of inactivity, and we write our
+    own small auth (plan_backend.txt §6) instead of adopting a second system mid-hackathon.
+  - Render Postgres: its free database expires after 30 days.
+
+No Alembic migrations. Base.metadata.create_all() runs on startup. If the schema changes
+mid-hackathon, drop the tables in Neon's SQL editor. The data is throwaway.
+
+
+## 2. Tables
+
+Quantities are stored as integers in base units: grams for kg/g, millilitres for l/ml, pieces
+for pcs. This is the same representation the engine uses, so it is exact by construction. The
+user's chosen display unit is stored next to it.
+
+-- ── Accounts ─────────────────────────────────────────────────────────────
+
+CREATE TABLE users (
+  id               UUID PRIMARY KEY,
+  email            TEXT NOT NULL UNIQUE,            -- stored trimmed + lowercased (app does it, so SQLite works too)
+  password_hash    TEXT NOT NULL,                   -- argon2id string "$argon2id$..."; never the password
+  display_name     TEXT CHECK (char_length(display_name) <= 50),
+  email_verified_at TIMESTAMPTZ,                    -- NULL for now; reserved for email verification later
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_login_at    TIMESTAMPTZ
+);
+
+CREATE TABLE sessions (
+  id               UUID PRIMARY KEY,
+  user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash       TEXT NOT NULL UNIQUE,            -- sha256 of the cookie token; the raw token is never stored
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at       TIMESTAMPTZ NOT NULL,            -- created_at + 7 days
+  last_seen_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  user_agent       TEXT                             -- first 200 chars, to show "your devices" later
+);
+CREATE INDEX sessions_user_id_idx ON sessions (user_id);
+
+CREATE TABLE auth_attempts (                       -- rate limiting for login + signup
+  id               BIGSERIAL PRIMARY KEY,           -- (Integer autoincrement in SQLAlchemy)
+  kind             TEXT NOT NULL CHECK (kind IN ('login', 'signup')),
+  email_hash       TEXT,                            -- sha256(lowercased email); NULL for signup-by-IP
+  ip               TEXT NOT NULL,
+  success          BOOLEAN NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX auth_attempts_email_idx ON auth_attempts (email_hash, created_at);
+CREATE INDEX auth_attempts_ip_idx    ON auth_attempts (ip, created_at);
+-- Rows older than 24 h are deleted on each login (cheap cleanup, no cron needed).
+-- Emails are hashed here so this log doesn't become a second list of who has an account.
+
+-- ── Ration data ──────────────────────────────────────────────────────────
+
+CREATE TABLE cases (
+  id             UUID PRIMARY KEY,                 -- random, so links can't be guessed
+  user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,   -- owner; only logged-in users save
+  household_ref  TEXT CHECK (char_length(household_ref) <= 60),          -- optional label; no ID numbers
+  members        INTEGER NOT NULL CHECK (members > 0),
+  period_start   DATE NOT NULL,
+  period_end     DATE NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (period_end >= period_start)
+);
+CREATE INDEX cases_user_id_idx ON cases (user_id);
+
+CREATE TABLE entitlement_rules (
+  case_id        UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  id             TEXT NOT NULL,                    -- frontend-generated, e.g. "r-rice"
+  position       INTEGER NOT NULL,                 -- display order
+  item           TEXT NOT NULL,
+  basis          TEXT NOT NULL CHECK (basis IN ('per_member', 'per_household')),
+  qty_base       BIGINT NOT NULL CHECK (qty_base > 0),
+  unit           TEXT NOT NULL CHECK (unit IN ('kg', 'g', 'l', 'ml', 'pcs')),
+  due_by         DATE,                             -- only source of a "late" label
+  PRIMARY KEY (case_id, id)
+);
+
+CREATE TABLE distribution_records (
+  case_id        UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  id             TEXT NOT NULL,                    -- frontend-generated
+  position       INTEGER NOT NULL,
+  rule_id        TEXT,                             -- NULL = item has no rule (never counted)
+  item           TEXT NOT NULL,
+  qty_base       BIGINT CHECK (qty_base > 0),      -- may be NULL only while pending
+  unit           TEXT NOT NULL CHECK (unit IN ('kg', 'g', 'l', 'ml', 'pcs')),
+  received_on    DATE,                             -- NULL = unknown (flagged unclear)
+  status         TEXT NOT NULL CHECK (status IN ('confirmed', 'pending')),
+  entry_method   TEXT NOT NULL CHECK (entry_method IN ('manual', 'extracted_confirmed', 'extracted_edited')),
+  receipt_ref    TEXT,                             -- evidence: receipt number as written
+  note           TEXT,                             -- evidence: free note
+  no_receipt     BOOLEAN NOT NULL DEFAULT false,   -- evidence: user stated on purpose "I don't have a receipt"
+  receipt_text   TEXT,                             -- evidence: pasted text, VERBATIM, never edited
+  extraction     JSONB,                            -- parser's original suggestion + method (audit trail)
+  PRIMARY KEY (case_id, id),
+  FOREIGN KEY (case_id, rule_id) REFERENCES entitlement_rules (case_id, id),
+  CHECK (status = 'pending' OR qty_base IS NOT NULL)
+);
+
+CREATE TABLE reports (
+  id             UUID PRIMARY KEY,                 -- the share link; anyone with it can view
+  case_id        UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  generated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  case_snapshot  JSONB NOT NULL,                   -- exact Case input used
+  result         JSONB NOT NULL                    -- exact /api/calculate output
+);
+CREATE INDEX reports_case_id_idx ON reports (case_id);
+
+-- ── PLANNED (do NOT create during the hackathon) — nearest ration shops ──
+
+-- CREATE TABLE ration_shops (
+--   id            UUID PRIMARY KEY,
+--   name          TEXT NOT NULL,
+--   address       TEXT,
+--   lat           DOUBLE PRECISION NOT NULL CHECK (lat BETWEEN -90 AND 90),
+--   lon           DOUBLE PRECISION NOT NULL CHECK (lon BETWEEN -180 AND 180),
+--   shop_code     TEXT,                  -- official fair-price-shop code, if the source has one
+--   source        TEXT NOT NULL,         -- e.g. 'state_epds_list', 'openstreetmap'
+--   source_ref    TEXT,                  -- id in that source (e.g. OSM node id)
+--   source_date   DATE NOT NULL,         -- when the data was taken
+--   verified      BOOLEAN NOT NULL DEFAULT false
+-- );
+-- CREATE INDEX ration_shops_lat_lon_idx ON ration_shops (lat, lon);
+-- Floats are fine here: coordinates are for distance sorting, not for entitlement maths.
+-- If we later need real geo queries, enable PostGIS on Neon and add a geography column.
+
+Notes:
+  - Evidence lives as columns on the record (1 record ↔ 1 evidence source), which keeps the
+    joins simple. The "unrecorded" case (evidence without confirmed values) is a record with
+    status = 'pending'.
+  - The composite FK record → rule is checked only when rule_id is not NULL (Postgres MATCH
+    SIMPLE). If the user deletes a rule, the frontend sets its records' rule_id to null (A).
+  - PUT /api/cases/{id}: in ONE transaction, delete the case's records, delete its rules, insert
+    rules, then insert records. Order matters because of the FK.
+  - extraction JSONB lets the report show "AI suggested 8 kg / 03-09; user confirmed 8 kg /
+    2026-09-03". That is a strong transparency point for the demo.
+  - Deleting a user cascades to their sessions, cases, rules, records and reports.
+
+
+## 3. Mapping API ↔ DB (in routers/cases.py)
+
+  API quantity {"value": "2.5", "unit": "kg"}  ⇄  qty_base = 2500, unit = 'kg'   (engine/units.py)
+  API record.date                              ⇄  received_on
+  API record.evidence.{receipt_ref,note,no_receipt,receipt_text} ⇄ the four evidence columns
+  API period.{start,end}                       ⇄  period_start, period_end
+  case.user_id                                 ⇐  current_user.id (NEVER taken from the request body)
+  Reuse engine/units.py for the conversion. Never write a second converter.
+
+
+## 4. Privacy (state this in the README and the demo)
+
+  - Account data is limited to email + password hash (+ optional display name). We store no
+    phone numbers, Aadhaar or full ration-card numbers. household_ref is an optional label, and
+    the UI tells users not to put IDs there.
+  - Checking a ration does not need an account. Nothing is stored for guests: /api/calculate
+    and /api/receipt/parse are stateless.
+  - Saved cases are visible only to their owner. Report links are public to whoever holds them,
+    and the share screen says so.
+  - Location for the map (planned) is used in the browser only. It is never sent to or stored by
+    the backend, except as the lat/lon of a nearby-shops query, which isn't logged.
+  - Seed/demo data is fictional.
+
+
+## 5. Setup steps (G, with N for the dashboard login)
+
+  1. neon.tech → New project "rationsaathi", region AWS Asia Pacific (Singapore).
+  2. Copy the POOLED connection string. Change the scheme to postgresql+psycopg:// and keep
+     ?sslmode=require. Example:
+       postgresql+psycopg://USER:PASS@ep-xxxx-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+  3. Give it to N to set as DATABASE_URL on Render. Never commit it.
+  4. Local: leave DATABASE_URL unset → SQLite. To test against Neon locally, put it in backend/.env.
+  5. python -m app.db.seed → creates demo user demo@rationsaathi.test with a password read from
+     the SEED_PASSWORD env var (not hard-coded), plus the demo case.

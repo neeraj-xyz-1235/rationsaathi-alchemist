@@ -1,0 +1,324 @@
+# Frontend Plan — React (M + A)
+
+The detailed UI spec is the "frontend context" section of context.txt (accessibility, screens,
+validation rules, definition of done). It still applies. The VISUAL reference is the team mockup
+image (header, 3 screens, component library), described in §2 so it lives in the repo.
+This file covers: who builds what, the theme, routes, state, the API hookup, login/signup,
+and the map placeholder.
+
+
+## 1. Changes from context.txt and the mockup (agreed for the whole team)
+
+  1. NO arithmetic in the frontend. The mockup's app structure lists utils/calculator.js and
+     utils/receiptParser.js; we do NOT build those. Review and Report call POST /api/calculate,
+     and receipt reading calls POST /api/receipt/parse (plan_backend.txt §2). Reason: one source
+     of truth, which is tested Python with exact integer math.
+  2. Validation uses zod schemas (src/validation/) for ALL forms, including family, rules,
+     records, login and signup. No hand-written validation.js.
+  3. Routing uses react-router-dom, because we now have more than 3 screens (§4).
+  4. Translations are split per screen to avoid merge conflicts (§5).
+  5. Report sentences are built from backend codes using translated templates (§6).
+  6. The mockup uses October 2024 dates. The demo uses September 2026, an ended period
+     (plan_overview.txt §6).
+  7. The mockup's "Household reference" placeholder says "e.g. Ration Card Number". Change it to
+     "e.g. Home – September" with the hint "Don't enter card or ID numbers".
+  8. The mockup's rules table has only "Quantity per Member". Add a "Per member / Per household"
+     choice (the backend supports both).
+  9. Checking a ration works WITHOUT an account. Login is only needed to save cases and create
+     share links.
+
+
+## 2. Visual theme (from the mockup — match it)
+
+Colour tokens (Tailwind @theme in src/index.css; hex values from context.txt §2.2 plus the
+extra tints the mockup uses, eyedrop-check them against the image):
+  --color-primary        #176B45   buttons, active step, active language pill, icons
+  --color-primary-tint   #E8F3EC   Expected card background, How-It-Works circles
+  --color-bg             #F3F7F2   page background
+  --color-card           #FFFFFF
+  --color-accent         #E9A23B   Difference card, Observation box border/icon, edit pencil
+  --color-accent-tint    #FDF3E3   Difference card + Observation box background
+  --color-slate-tint     #EEF2F7   Total Received card background (box icon in slate/navy)
+  --color-info           #2563EB   info alert icon;  --color-info-tint #EFF6FF info alert background
+  --color-danger         #DC2626   ONLY destructive actions (Danger button, delete icon) and form
+                                   errors. NEVER for a shortfall.
+  --color-text #1F2937   --color-muted #6B7280   --color-border #E5E7EB
+Font: Noto Sans + Noto Sans Devanagari (Google Fonts). Body text 16 px+. Buttons 48 px tall.
+Radius: rounded-xl on cards, rounded-lg on inputs/buttons. Soft shadow on cards (shadow-sm).
+
+Global header (every page), from the mockup:
+  left:  leaf/grain logo + "RationSaathi" + tagline "Your Ration Entitlement Companion"
+         (hide the tagline under 640 px)
+  right: language segmented pill [English | हिंदी | मराठी] (active one filled green),
+         Home, Help, (?) icon, and NEW: "Log in" (secondary button) or, when logged in, a user
+         menu with the display name: "My saved checks", "Log out"
+  On mobile the nav links collapse into a menu button. The language pill stays visible.
+
+Screen 1 — Home: big "Check Your Ration" heading + one-line intro, family/ration-sack
+  illustration on the right (stacks under the text on mobile; an SVG or PNG in src/assets),
+  3 action cards (green icon, title, description, round green arrow button): Check Entitlement /
+  Add Received Ration / View Report. "How It Works": 4 numbered green circles joined by a line.
+  Neutral info box at the bottom. NEW: a slim banner card "Find your nearest ration shop — coming
+  soon" with a map icon, linking to /shops.
+Screen 2 — Entry: a 4-step stepper (current = filled green circle, others outlined, joined by a
+  line, labels under each). One white card per step with a title + subtitle. On desktop the
+  label is on the left and the input on the right; required fields have a red *. Inputs show an
+  icon (people, calendar). Back = outlined button with ←, Next = green button with →.
+  Rules: a table (Item select, Quantity, Unit select, delete icon) + "+ Add Another Item".
+  Records: "Add Record Manually" (primary) + "Paste Receipt Text (AI Assist)" (secondary), then a
+  table: Date | Item | Quantity | Receipt Ref | Source | Actions (pencil, bin).
+  Review: 4 stat tiles (Family Members, Period, Ration Items, Distribution Records) +
+  "Generate Report →".
+Screen 3 — Report: "Ration Report" title + subtitle, with Print Report / Copy Text (outlined) at
+  the top right. 3 summary cards: Expected (green tint, bag icon), Total Received (slate tint, box
+  icon), Difference (amber tint, scales icon). Calculation Breakdown as label/value rows with
+  values right-aligned. Distribution Records table incl. Source and Receipt Text columns.
+  Observation box (amber tint, info icon) with the neutral sentence. A small footer note.
+  Bottom bar: "← Edit Details", Print, Copy, and NEW: "Save" / "Get share link" (needs login).
+  With several items (Rice + Wheat), repeat the 3 cards + breakdown per item, under the item name.
+Component library (build these first, everything else uses them): Button (primary / secondary /
+  danger / disabled), Field (label, input, date input with calendar icon, select, error message
+  with ! icon), ActionCard, SummaryCard, Table (switches to stacked cards under 640 px), Alert
+  (info / attention), Stepper, LanguagePill.
+Login / Signup: same header; a centred white card on the soft green background; title, fields,
+  full-width primary button, a link to the other page, and a "Continue without an account" text
+  link back to /check.
+
+
+## 3. Split
+
+M — shell + Home + Report + accounts:
+  theme + component library, Header/LanguagePill/Footer, i18n helper, router, api client + mocks,
+  AuthContext, Login + Signup pages, My saved checks, Home, Report, print/copy/save/share
+
+A — Entry wizard + map placeholder:
+  zod case schemas, Steps 1–4, receipt paste → confirm, /shops map placeholder
+
+
+## 4. Folder layout + routes
+
+frontend/src/
+  main.jsx  App.jsx                M   router + providers (Lang, Auth, Case)
+  api/client.js                    M   fetch wrappers, mock switch, error-code handling
+  api/mocks/                       M   calculate.json, parse.json, auth.json (copied from plan_backend.txt §2)
+  context/AuthContext.jsx          M   user, login(), signup(), logout(), loading
+  context/CaseContext.jsx          M   caseData + result + localStorage draft
+  i18n/index.js                    M   t(), useLang
+  i18n/common.js home.js report.js auth.js   M     { en: {...}, hi: {...}, mr: {...} }
+  i18n/entry.js shops.js           A
+  validation/auth.js               M   loginSchema, signupSchema (§7)
+  validation/case.js               A   familySchema, ruleSchema, recordSchema, caseSchema
+  components/ui/                   M   Button, Field, Select, ActionCard, SummaryCard, Table, Alert, Stepper, Spinner
+  components/layout/               M   Header, LanguagePill, UserMenu, Footer
+  components/report/               M   SummaryCards, CalculationBreakdown, RecordsTable, Observation, ReportActions
+  components/entry/                A   FamilyStep, RulesStep, RecordsStep, ReceiptPaste, SuggestionCard, ReviewStep
+  components/shops/                A   ShopsMap (lazy-loaded)
+  pages/Home.jsx Report.jsx SharedReport.jsx Login.jsx Signup.jsx MyCases.jsx Help.jsx   M
+  pages/Entry.jsx Shops.jsx        A
+  utils/format.js                  M   date/quantity display only (no math)
+  scripts/check-i18n.js            M   fails CI if a key is missing in hi or mr
+
+Routes (react-router-dom):
+  /              Home                     /login     Login       /signup   Signup
+  /check         Entry wizard             /report    Report of the current (unsaved) case
+  /r/:reportId   Shared report (public)   /my-cases  My saved checks (login required)
+  /shops         Map placeholder          /help      Short help/FAQ (static, optional)
+  A protected route that finds no user redirects to /login?next=<path>.
+
+Dependencies: react-router-dom, zod, react-hook-form, @hookform/resolvers, lucide-react,
+leaflet, react-leaflet. Announce in chat before adding anything else.
+
+
+## 5. Shared contracts inside the frontend
+
+CaseContext (M owns it; A's wizard reads and writes through it):
+  caseData   EXACTLY the Case object in plan_backend.txt §2.1
+  result     the /api/calculate response
+  setCase, resetCase
+  - Save caseData to localStorage as a draft on every change (wrapped in try/catch), so a
+    refresh, or a detour through /login, doesn't lose the user's input.
+  - Clear the draft on logout and on "Start over". People often share phones.
+  - Quantities stay STRINGS from the input field to the API. Never Number() them.
+  - New rule/record ids: crypto.randomUUID().
+
+API client (M, ready by T+1:15 so A can use parseReceipt):
+  - All URLs are RELATIVE: fetch('/api/...'). Vercel and the Vite dev server forward them to the
+    backend (plan_deployment.txt §5). That keeps the login cookie first-party. Never hard-code
+    the Render URL.
+  - Send credentials: 'same-origin' and Content-Type: application/json on every request.
+  - Functions: calculate, parseReceipt, listCases, saveCase, updateCase, deleteCase, createReport,
+    getReport, getNearbyShops, auth.signup, auth.login, auth.logout, auth.me
+  - Error responses come as { error: { code, fields?, retry_after_s? } }. Throw an ApiError with
+    those fields, and the pages translate the code with t('errors.' + code).
+  - 401 on a protected call → clear the user in AuthContext and go to /login?next=<current path>.
+  - VITE_USE_MOCKS=true → return the mock JSON after a 400 ms delay (auth mock: any email +
+    "password1234" logs in).
+  - If a request takes >5 s, show "Starting the server, this can take up to a minute"
+    (the Render free tier sleeps when idle).
+
+i18n:
+  t('entry.addRecord'), t('report.sentence.shortfall', { item, received, expected, diff, unit, period })
+  Missing key in hi/mr → fall back to English + console.warn. CI catches it anyway.
+  Each person writes en/hi/mr for their own file. A first draft via a translation tool is fine,
+  but a Hindi/Marathi speaker on the team reviews it before freeze.
+
+
+## 6. Report sentence templates (M) — neutral, no banned words
+
+  shortfall        "Confirmed records for {item} total {received} {unit} against an expected
+                    entitlement of {expected} {unit} for {period}, a difference of {diff} {unit}.
+                    The reason for this difference has not been established."
+  no_difference    "Confirmed records for {item} total {received} {unit}, which matches the
+                    expected entitlement of {expected} {unit} for {period}."
+  above_expected   "Confirmed records for {item} total {received} {unit}, which is {diff} {unit}
+                    more than the expected entitlement of {expected} {unit} for {period}."
+  unclear/PERIOD_NOT_ENDED  "So far, confirmed records for {item} total {received} {unit} of an
+                    expected {expected} {unit}. The period ends on {end}, so this may change."
+  unclear/excluded "{n} record(s) for {item} were not included: {reasons}. Please review them."
+     reasons:  PENDING_NOT_CONFIRMED "not yet confirmed" | MISSING_DATE "no date entered" |
+               OUTSIDE_PERIOD "dated outside the period" | UNIT_MISMATCH "unit doesn't match the rule"
+  late             "{n} distribution(s) of {item} are dated after the due date of {due_by} that you entered."
+  unrecorded       "{n} receipt(s) for {item} were added but not confirmed, so they are not in the total."
+  unmatched        "{item}: no entitlement rule was entered for this item, so it was not compared."
+  evidence         no_receipt=true → "No receipt (stated by user)"; nothing given → "No evidence provided"
+  footer           "This report compares recorded quantities with the rules you entered. It does
+                    not establish the cause of any difference."
+  The parser issue codes (plan_backend.txt §2.3) also each need a sentence (A, in entry.js).
+
+
+## 7. Login + signup with zod (M)
+
+Schemas (src/validation/auth.js). They MUST mirror plan_backend.txt §2.5. If one side changes,
+the other changes in the same PR. Error messages are i18n KEYS, shown via t(error.message).
+
+  email:        z.string().trim().toLowerCase().max(254, 'auth.emailTooLong').email('auth.emailInvalid')
+                (zod v4 also has z.email(); use whichever the installed version documents)
+  password:     z.string().min(10, 'auth.passwordTooShort').max(128, 'auth.passwordTooLong')
+  displayName:  z.string().trim().max(50, 'auth.nameTooLong').optional()
+  loginSchema:  { email, password: z.string().min(1, 'auth.passwordRequired') }
+                Login only checks "not empty". Never tell someone their old password is "too
+                short"; the server decides.
+  signupSchema: { email, password, confirmPassword, displayName }
+                .refine(d => d.password === d.confirmPassword,
+                        { path: ['confirmPassword'], message: 'auth.passwordsDontMatch' })
+
+Forms: react-hook-form + zodResolver(schema), mode 'onBlur', errors shown under each field
+(red text + ! icon, as in the mockup) and announced with aria-describedby / aria-invalid.
+After a server error, map error.fields onto the form with setError so server-only checks
+(PASSWORD_TOO_COMMON, EMAIL_UNAVAILABLE) appear in the same place.
+
+UX + security details:
+  - Inputs: type="email" autocomplete="email"; password autocomplete="current-password" (login)
+    / "new-password" (signup); a show/hide password toggle (eye icon, with a label). Never block paste.
+  - Hint under the signup password: "At least 10 characters. A short sentence works well."
+  - Disable the submit button while the request is in flight (no double submits).
+  - INVALID_CREDENTIALS → "Email or password is incorrect." Never say which one was wrong.
+  - RATE_LIMITED → "Too many attempts. Please try again in {minutes} minutes." (from retry_after_s),
+    and disable the button until then.
+  - After login: navigate to ?next= ONLY if it starts with "/" and not "//" (prevents an open
+    redirect to another site); otherwise go to /.
+  - The session lives in an HttpOnly cookie that JavaScript can't read. Never store tokens or
+    passwords in localStorage/sessionStorage, and never console.log form values.
+  - AuthContext calls GET /api/auth/me once on app start to know whether someone is logged in.
+  - Report page: "Save" / "Get share link" when logged out → "Log in to save this check" →
+    /login?next=/report. The draft survives through localStorage, so the user loses nothing.
+  - Share link screen: "Anyone with this link can view this report."
+
+
+## 8. Map placeholder — nearest ration shops (A) — PLANNED FEATURE
+
+  Page /shops + the Home banner card. Built so that real shop data can be plugged in later
+  without UI changes.
+  - Leaflet + react-leaflet. Load the map component with React.lazy so its JS doesn't slow the
+    home page. Import 'leaflet/dist/leaflet.css'. Vite breaks Leaflet's default marker icon, so
+    import the marker PNGs explicitly and set L.Icon.Default.
+  - Tiles: https://tile.openstreetmap.org/{z}/{x}/{y}.png with the attribution
+    '© OpenStreetMap contributors' linked to openstreetmap.org/copyright. The attribution is
+    REQUIRED by OSM's licence. OSM's public tiles are fine for a light prototype; production
+    needs a tile provider.
+  - Default view: India, centre [22.5, 79.0], zoom 5. The map box is 360 px tall (240 px on mobile).
+  - "Use my location" button: call navigator.geolocation ONLY when clicked, with a line
+    explaining why. If granted, centre there (zoom 13) with a "You are here" marker. If denied,
+    keep the default view and show a calm message. Don't store the location.
+  - Call getNearbyShops(lat, lon). The backend returns status "planned" and an empty list, and
+    the page shows an Alert (info): "Coming soon: we're collecting verified ration shop
+    locations. No shops are shown yet."
+  - NEVER show sample or made-up shop pins. A fake location could send someone to the wrong
+    place.
+  - Below the map, a text version for screen readers: "Map of your area. Shop locations are
+    not available yet."
+  - Strings go in i18n/shops.js (en/hi/mr).
+
+
+## 9. M — tasks
+
+  [0:30–1:15] Theme tokens + fonts (§2), component library, Header + LanguagePill + Footer,
+              router skeleton with every route as a stub page, i18n/index.js + common.js,
+              api/client.js + mocks
+  [1:15–2:30] Home (exactly as the mockup + the shops banner). If there's no data, "View Report"
+              leads to /check instead of an empty report. Report on mock data: SummaryCards,
+              CalculationBreakdown (lines built from the structured fields, e.g. "4 × 5 kg = 20 kg"),
+              RecordsTable (Source: "Typed" / "Read from receipt, confirmed" / "...edited"),
+              Observation box, labels as text + icon (never colour alone; amber = needs review,
+              grey = neutral, no red)
+  [2:30–3:30] Real API + loading/error states; sentence templates (§6) in en/hi/mr; Copy text;
+              Print (print CSS hides the header, buttons and language pill, black on white,
+              shows generated_at)
+  [3:30–4:30] AuthContext, Login + Signup with zod (§7), UserMenu, Save + share link,
+              /r/:reportId, My saved checks (list + open + delete)
+  [4:30–5:30] Responsive pass, long Devanagari strings, focus rings, 48 px targets,
+              check-i18n script, the whole flow in 3 languages, logged in AND as a guest
+
+
+## 10. A — tasks
+
+  [0:30–1:30] validation/case.js (zod), with every rule in context.txt §6.3 as a schema and
+              messages as i18n keys:
+                members: z.coerce.number().int().positive(); period end ≥ start (refine);
+                quantity value: a string matching /^\d+(\.\d{1,3})?$/ and > 0 (string, NOT a number);
+                record date within the period → a WARNING shown in Review, not a block (the
+                backend reports it as excluded)
+              Entry wizard shell with Stepper and Next/Back (Next runs that step's schema)
+              Step 1: members, period start/end, optional label (hint: no card or ID numbers)
+              Step 2: rules table. Item (datalist: Rice, Wheat, Sugar, Dal, Edible oil, or free
+                      text, the same list as the backend synonyms in plan_backend.txt §4.1), Per
+                      member / Per household, quantity + unit, optional "due by" date under "More
+                      options". Show the formula text only ("4 members × 5 kg"). The total
+                      comes from the backend at Review.
+                      Deleting a rule → set rule_id = null on its records and warn.
+  [1:30–2:30] Step 3: records table (cards on mobile). Add / edit / delete.
+              Item dropdown from rules (sets rule_id). "Other item" → rule_id null + warning
+              "No rule for this item — it won't be counted".
+              Evidence: receipt number, note, and a checkbox "I don't have a receipt"
+              (→ no_receipt: true), so missing evidence is stated on purpose, never invented.
+              ReceiptPaste ("Paste Receipt Text (AI Assist)"): textarea (max 2,000 chars, with a
+              counter) → "Read receipt" → parseReceipt (mock) → one SuggestionCard per suggestion:
+                - amber "Suggestion — please check" badge; every field editable
+                - issues in plain words, e.g. DATE_AMBIGUOUS → "This date could be 3 Sep or
+                  9 Mar — please choose" with the candidates as radio buttons
+                - "Confirm & add" → status confirmed, entry_method extracted_confirmed (no field
+                  changed) or extracted_edited (something changed), receipt_text = the original
+                  pasted text, verbatim
+                - "Keep for later" → status pending (it will show as "unrecorded" in the report)
+                - "Discard"
+              If method is "regex": show "Read with the basic reader — please check carefully".
+              If RATE_LIMITED: "Please wait a minute before reading another receipt."
+  [2:30–3:45] Step 4 Review: 4 stat tiles + warnings for pending / undated / out-of-period records
+              → calls calculate() → "Generate Report →" → /report. Switch parse to the real API.
+              Finish entry.js in hi/mr.
+  [3:45–4:30] /shops map placeholder (§8) + shops.js translations
+  [4:30–5:30] Edge cases: 0/negative/decimal members, 1.2345 kg, end before start, empty rules,
+              record outside period, very long item names, Hindi receipt text "चावल 8 किलो 03/09"
+
+
+## 11. Frontend definition of done (in addition to context.txt §12)
+
+  [ ] Looks like the mockup: header, 3 screens, component styles
+  [ ] Nothing in src/ computes expected, received or difference
+  [ ] Mock mode and real mode both work (one env flag); all API URLs are relative
+  [ ] A suggestion never enters the totals until "Confirm & add"
+  [ ] Every record in the report shows its evidence, "No receipt (stated by user)", or "No evidence provided"
+  [ ] Guest flow works end to end; login is only asked for when saving or sharing
+  [ ] Signup/login: zod errors under fields, server errors mapped, rate-limit message, no token in storage
+  [ ] /shops shows the OSM map with attribution and the "coming soon" notice, and no fake shops
+  [ ] check-i18n passes; no banned words in src/i18n
