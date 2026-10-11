@@ -105,6 +105,7 @@ jobs:
       - run: npm audit --audit-level=high --omit=dev
       - name: No raw HTML injection
         run: "! grep -rn 'dangerouslySetInnerHTML' src"
+      - run: node scripts/check-links.js       # complaint links: https only + last_verified set (A writes this)
   neutral-language:
     runs-on: ubuntu-latest
     steps:
@@ -137,6 +138,8 @@ The banned-word list goes in the README too. Ask a Hindi/Marathi speaker on the 
     COOKIE_SECURE      true
     ENABLE_DOCS        true   (set to false after the hackathon)
     SEED_PASSWORD      (only if you run the seed on Render)
+    EMAIL_API_KEY      (email provider's API key; backend ONLY. Without it the email button hides)
+    EMAIL_FROM         (the verified sender address, e.g. rationsaathi.demo@gmail.com)
   No CORS: the browser never calls Render directly. Vercel forwards /api/* (§5.3).
   Check: https://<service>.onrender.com/api/health and /docs
 
@@ -182,6 +185,9 @@ The banned-word list goes in the README too. Ask a Hindi/Marathi speaker on the 
   [2:15–3:30] Auth + security (plan_backend.txt §2.5, §6), incl. tests
   [3:30–4:15] Claude extractor + fallback; set ANTHROPIC_API_KEY on Render; shops placeholder
   [4:15–4:30] Merge PRs, watch deploys, fix proxy/env/CSP issues
+  [0:30–1:15, add to the slot] Create the email provider account and verify the sender address NOW,
+              so it's ready when Phase B starts (plan_backend.txt §6.9)
+  [Phase B] email endpoint (plan_backend.txt §7), EMAIL_API_KEY + EMAIL_FROM on Render
   [4:30–6:00] Release checklist (§7), README, backup recording
 
 
@@ -201,6 +207,13 @@ The banned-word list goes in the README too. Ask a Hindi/Marathi speaker on the 
       - the logged-out guest flow still works end to end
       - /shops shows the map tiles (no CSP errors in the console) and no shop pins
       - securityheaders.com on the Vercel URL shows the headers from §5.3
+  [ ] Phase B smoke test on the DEPLOYED site (skip what was cut):
+      - save the demo case → Tracker shows the month with the right balance (70.0%)
+      - "Start next month" creates the next month with rules and no records
+      - "Email me this report" arrives in the inbox (and spam folder check), in the chosen language,
+        with the neutral wording and the footer; the 4th send within an hour is refused
+      - every link on /complaints opens the right official site (a person clicks each one)
+      - /complaints works for a guest, and the copied summary has no accusatory wording
   [ ] Backup plan: a screen recording of the full flow, plus a local run ready
       (npm run dev + uvicorn) in case Wi-Fi or Render fails
   [ ] 3 minutes before presenting: open /api/health to wake Render, then load the site once

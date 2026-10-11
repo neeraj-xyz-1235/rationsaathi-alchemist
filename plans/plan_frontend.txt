@@ -26,6 +26,13 @@ and the map placeholder.
      choice (the backend supports both).
   9. Checking a ration works WITHOUT an account. Login is only needed to save cases and create
      share links.
+ 10. Monthly tracker (/tracker, login required) replaces "My saved checks": every saved case is
+     one month, listed with its balance. (§11.2)
+ 11. Balance panel on the report: how much of the entitlement is recorded vs remaining, e.g.
+     "7 of 10 kg". Numbers come from the API's `balance` block; the frontend does no maths. (§11.1)
+ 12. Complaints page (/complaints): a static list of official portals + a neutral summary to copy.
+     We never file anything and say so. (§11.3)
+ 13. "Email me this report" button on the report, sent to the account email only. (§11.4)
 
 
 ## 2. Visual theme (from the mockup — match it)
@@ -50,8 +57,8 @@ Global header (every page), from the mockup:
   left:  leaf/grain logo + "RationSaathi" + tagline "Your Ration Entitlement Companion"
          (hide the tagline under 640 px)
   right: language segmented pill [English | हिंदी | मराठी] (active one filled green),
-         Home, Help, (?) icon, and NEW: "Log in" (secondary button) or, when logged in, a user
-         menu with the display name: "My saved checks", "Log out"
+         Home, Complaints, Help, (?) icon, and NEW: "Log in" (secondary button) or, when logged in,
+         "My tracker" and a user menu with the display name: "My tracker", "Log out"
   On mobile the nav links collapse into a menu button. The language pill stays visible.
 
 Screen 1 — Home: big "Check Your Ration" heading + one-line intro, family/ration-sack
@@ -74,12 +81,21 @@ Screen 3 — Report: "Ration Report" title + subtitle, with Print Report / Copy 
   icon), Difference (amber tint, scales icon). Calculation Breakdown as label/value rows with
   values right-aligned. Distribution Records table incl. Source and Receipt Text columns.
   Observation box (amber tint, info icon) with the neutral sentence. A small footer note.
-  Bottom bar: "← Edit Details", Print, Copy, and NEW: "Save" / "Get share link" (needs login).
+  Bottom bar: "← Edit Details", Print, Copy, and NEW: "Save" / "Get share link" (needs login) and
+  "Email me this report" (needs login). NEW under the 3 cards, per item: a Balance panel with a
+  progress bar and a sentence (§11.1). After the Observation box: a small link "Want someone to
+  review this? See where to raise a query" → /complaints.
+Screen 4 — Tracker (new, §11.2): page title, household selector, "Start next month" button, then
+  a list of month cards (newest first), each with the period, an Ongoing/Ended badge, and one
+  row per item with a mini progress bar and "14 of 20 kg · 6 kg remaining".
+Screen 5 — Complaints (new, §11.3): intro Alert, 3 step cards, a state selector, then link cards
+  for each official portal/helpline.
   With several items (Rice + Wheat), repeat the 3 cards + breakdown per item, under the item name.
 Component library (build these first, everything else uses them): Button (primary / secondary /
   danger / disabled), Field (label, input, date input with calendar icon, select, error message
   with ! icon), ActionCard, SummaryCard, Table (switches to stacked cards under 640 px), Alert
-  (info / attention), Stepper, LanguagePill.
+  (info / attention), Stepper, LanguagePill, ProgressBar (always with its text value beside it,
+  e.g. "7 of 10 kg (70.0%)", never colour alone).
 Login / Signup: same header; a centred white card on the soft green background; title, fields,
   full-width primary button, a link to the other page, and a "Continue without an account" text
   link back to /check.
@@ -89,10 +105,12 @@ Login / Signup: same header; a centred white card on the soft green background; 
 
 M — shell + Home + Report + accounts:
   theme + component library, Header/LanguagePill/Footer, i18n helper, router, api client + mocks,
-  AuthContext, Login + Signup pages, My saved checks, Home, Report, print/copy/save/share
+  AuthContext, Login + Signup pages, Tracker, balance panel, email button, Home, Report,
+  print/copy/save/share
 
 A — Entry wizard + map placeholder:
-  zod case schemas, Steps 1–4, receipt paste → confirm, /shops map placeholder
+  zod case schemas, Steps 1–4, receipt paste → confirm, /shops map placeholder,
+  /complaints page + its link data
 
 
 ## 4. Folder layout + routes
@@ -104,25 +122,29 @@ frontend/src/
   context/AuthContext.jsx          M   user, login(), signup(), logout(), loading
   context/CaseContext.jsx          M   caseData + result + localStorage draft
   i18n/index.js                    M   t(), useLang
-  i18n/common.js home.js report.js auth.js   M     { en: {...}, hi: {...}, mr: {...} }
-  i18n/entry.js shops.js           A
+  i18n/common.js home.js report.js auth.js tracker.js   M     { en: {...}, hi: {...}, mr: {...} }
+  i18n/entry.js shops.js complaints.js   A
+  data/complaintLinks.json         A   static list of portals/helplines (§11.3)
   validation/auth.js               M   loginSchema, signupSchema (§7)
   validation/case.js               A   familySchema, ruleSchema, recordSchema, caseSchema
   components/ui/                   M   Button, Field, Select, ActionCard, SummaryCard, Table, Alert, Stepper, Spinner
   components/layout/               M   Header, LanguagePill, UserMenu, Footer
-  components/report/               M   SummaryCards, CalculationBreakdown, RecordsTable, Observation, ReportActions
+  components/report/               M   SummaryCards, CalculationBreakdown, RecordsTable, Observation, ReportActions, BalancePanel, EmailButton
+  components/tracker/              M   MonthCard, MiniBar, HouseholdSelect
   components/entry/                A   FamilyStep, RulesStep, RecordsStep, ReceiptPaste, SuggestionCard, ReviewStep
   components/shops/                A   ShopsMap (lazy-loaded)
-  pages/Home.jsx Report.jsx SharedReport.jsx Login.jsx Signup.jsx MyCases.jsx Help.jsx   M
-  pages/Entry.jsx Shops.jsx        A
+  pages/Home.jsx Report.jsx SharedReport.jsx Login.jsx Signup.jsx Tracker.jsx Help.jsx   M
+  pages/Entry.jsx Shops.jsx Complaints.jsx   A
   utils/format.js                  M   date/quantity display only (no math)
   scripts/check-i18n.js            M   fails CI if a key is missing in hi or mr
+  scripts/check-links.js           A   fails CI if a complaintLinks.json entry isn't https or lacks last_verified
 
 Routes (react-router-dom):
   /              Home                     /login     Login       /signup   Signup
   /check         Entry wizard             /report    Report of the current (unsaved) case
-  /r/:reportId   Shared report (public)   /my-cases  My saved checks (login required)
+  /r/:reportId   Shared report (public)   /tracker   My monthly tracker (login required; replaces "My saved checks")
   /shops         Map placeholder          /help      Short help/FAQ (static, optional)
+  /complaints    Complaint links (public, no login)
   A protected route that finds no user redirects to /login?next=<path>.
 
 Dependencies: react-router-dom, zod, react-hook-form, @hookform/resolvers, lucide-react,
@@ -147,7 +169,8 @@ API client (M, ready by T+1:15 so A can use parseReceipt):
     the Render URL.
   - Send credentials: 'same-origin' and Content-Type: application/json on every request.
   - Functions: calculate, parseReceipt, listCases, saveCase, updateCase, deleteCase, createReport,
-    getReport, getNearbyShops, auth.signup, auth.login, auth.logout, auth.me
+    getReport, getNearbyShops, getTracker, nextMonth(caseId), emailReport(reportId, lang),
+    listGrievances / saveGrievance (optional), auth.signup, auth.login, auth.logout, auth.me
   - Error responses come as { error: { code, fields?, retry_after_s? } }. Throw an ApiError with
     those fields, and the pages translate the code with t('errors.' + code).
   - 401 on a protected call → clear the user in AuthContext and go to /login?next=<current path>.
@@ -183,6 +206,17 @@ i18n:
   evidence         no_receipt=true → "No receipt (stated by user)"; nothing given → "No evidence provided"
   footer           "This report compares recorded quantities with the rules you entered. It does
                     not establish the cause of any difference."
+  balance (per phase; {remaining} etc. come straight from the API's balance block):
+    ongoing, remaining > 0   "{remaining} {unit} of your {expected} {unit} for {item} is still to be
+                              collected this period ({percent}% recorded so far)."
+    ended, remaining > 0     "{remaining} {unit} of the {expected} {unit} entitlement for {item} was not
+                              recorded as collected in this period. This does not say why."
+    remaining = 0, over = 0  "The full {expected} {unit} for {item} has been recorded."
+    over_by > 0              "{over_by} {unit} more than the entitlement has been recorded for {item}."
+    carry note (always)      "Whether unused ration can be collected later depends on the scheme's own
+                              rules, which this tool does not assume. Please check with your local office."
+  The email in plan_backend.txt §6.9 repeats the shortfall / no_difference / above_expected
+  sentences. If you change them here, tell N in the same PR.
   The parser issue codes (plan_backend.txt §2.3) also each need a sentence (A, in entry.js).
 
 
@@ -265,7 +299,7 @@ UX + security details:
               Print (print CSS hides the header, buttons and language pill, black on white,
               shows generated_at)
   [3:30–4:30] AuthContext, Login + Signup with zod (§7), UserMenu, Save + share link,
-              /r/:reportId, My saved checks (list + open + delete)
+              /r/:reportId. Then Phase B (§11.5): balance panel, tracker, email button.
   [4:30–5:30] Responsive pass, long Devanagari strings, focus rings, 48 px targets,
               check-i18n script, the whole flow in 3 languages, logged in AND as a guest
 
@@ -311,7 +345,95 @@ UX + security details:
               record outside period, very long item names, Hindi receipt text "चावल 8 किलो 03/09"
 
 
-## 11. Frontend definition of done (in addition to context.txt §12)
+## 11. Phase B features (balance, tracker, complaints, email)
+
+Build these after Checkpoint 2, in the order of §11.5. Each has its own cut-list position
+(plan_overview.txt §8).
+
+### 11.1 Balance panel on the report (M)
+  - Under the 3 summary cards, per item: ProgressBar whose width is `percent_used` from the API
+    (visually capped at 100%), with the text always beside it: "7 of 10 kg recorded (70.0%)".
+  - Below it, one sentence from the balance templates (§6) chosen by `phase` and the numbers, then
+    the carry note in small grey text.
+  - Example (ongoing, 7 of 10 kg): "3 kg of your 10 kg for Rice is still to be collected this
+    period (70.0% recorded so far)."
+  - Never compute remaining or percent in the frontend. Read the `balance` block.
+  - Colours: green for the recorded part, grey for the rest. Not amber, not red. It prints
+    properly in black and white because the text carries the meaning.
+
+### 11.2 Monthly tracker /tracker (M)
+  - Logged out: a card explaining the tracker with Log in / Sign up buttons, plus "or continue
+    without an account".
+  - Top bar: title, a household selector (only when there is more than one household_ref), and
+    "Start next month". That button calls nextMonth(latest case of the selected household), then
+    opens /check with the new case loaded (rules and members already filled in, no records). A
+    409 shows "This month already exists" with an Open link.
+  - MonthCard list, newest first:
+      period label (month name + year, Intl.DateTimeFormat with locale en-IN / hi-IN / mr-IN and
+      numberingSystem 'latn'), phase badge (Ongoing / Ended, text + icon),
+      one row per item: name, MiniBar, "14 of 20 kg · 6 kg remaining" (all values from the API),
+      LabelBadge for each label, buttons: Open (edit in the wizard), View report, Delete (confirm).
+  - Empty state: "No saved months yet. Check a ration and press Save."
+  - The balance sentence rules in §6 apply here too. Never say why anything is below the
+    entitlement. Carry-over note shown once at the bottom of the page.
+  - Optional (cut first): a compare table, rows = items, columns = months, cells = percent_used.
+    Plain HTML table, no chart library.
+  - Optional (cut first): "My complaint notes" per month card, using the grievance endpoints.
+
+### 11.3 Complaints page /complaints (A)
+  - Purpose: show where a person can raise a query or grievance. We never file anything, and the
+    page says so in an Alert at the top: "RationSaathi is an independent tool. It is not a
+    government service and cannot submit a complaint for you."
+  - Neutral intro: "A difference in a report does not, by itself, say what caused it. If you want
+    someone to look into it, these official channels can review your records."
+  - Three step cards: 1) Get your report (buttons: Print, Email me this report, or "Generate a
+    report" if none exists), 2) Keep your evidence (receipt numbers, photos, notes), 3) Choose
+    where to raise it (below).
+  - Data: src/data/complaintLinks.json, an array of
+      { key, scope: "national" | "state", state: null | "Maharashtra", kind: "portal" | "helpline",
+        name: {en,hi,mr}, description: {en,hi,mr}, url, phone, last_verified: "YYYY-MM-DD" }
+  - A state selector (default = national only), remembered in localStorage (try/catch). It shows
+    the national entries plus those for the chosen state.
+  - Each entry is a card: name, description, domain shown in text, an "Open official site ↗" link
+    with target="_blank" rel="noopener noreferrer" and "(opens in a new tab)" text. Helplines get
+    a tel: link. Never embed a portal in an iframe.
+  - STARTING POINTS, NOT FACTS. I could not open these live while writing the plan. Whoever builds
+    the page opens every URL and checks every number in a browser, and sets last_verified:
+        national:    National Food Security Portal (nfsa.gov.in)
+                     CPGRAMS public grievance portal (pgportal.gov.in)
+                     Dept. of Food & Public Distribution (dfpd.gov.in)
+                     national toll-free PDS helpline(s): 1967 and 14445 are commonly cited, confirm
+        Maharashtra: the state food, civil supplies and consumer protection department site
+                     (e.g. mahafood.gov.in) and its helpline, confirm
+    Don't add an entry without opening it. Add more states only if someone can verify them.
+    scripts/check-links.js (CI) fails on any non-https url or missing last_verified.
+  - "Copy a neutral summary" button: builds plain text from the current result using the §6
+    sentences (in the language chosen on the page), for pasting into a portal's text box. It
+    lists each item's expected / received / balance and the receipt references, ends with the
+    report footer, and contains no accusation. Disabled, with a hint, when no report exists yet.
+  - Link from the Report page (small text link after the Observation box) and from the Home info box.
+  - Strings in i18n/complaints.js (en/hi/mr).
+
+### 11.4 Email me this report (M)
+  - Button with an envelope icon on the Report page. Logged out → "Log in to email this report"
+    (login with ?next=/report). Not saved yet → save the case and create the report first, then
+    send, with visible progress ("Saving… Sending…").
+  - emailReport(reportId, lang) with the current UI language. On 202: "Sent to s***@gmail.com.
+    It can take a few minutes. Please check your spam folder." On 429: "You have reached the
+    email limit for now. Please try again later." On 503 (or health says email not_configured):
+    hide the button, or show it disabled with "Email isn't available right now."
+  - Disable the button while sending (no double send). Under the button, small text: "The email
+    contains a link. Anyone with the link can view the report."
+  - Don't offer a recipient field. The backend only sends to the account email.
+
+### 11.5 Phase B task order
+  M: balance panel (45 min) → tracker page (90 min) → email button (30 min)
+  A: complaints page + link data + check-links script (60 min) → copy-summary button (20 min)
+     → grievance notes UI only if everything else is done
+  Translations for each feature are written with the feature, not at the end.
+
+
+## 12. Frontend definition of done (in addition to context.txt §12)
 
   [ ] Looks like the mockup: header, 3 screens, component styles
   [ ] Nothing in src/ computes expected, received or difference
@@ -322,3 +444,8 @@ UX + security details:
   [ ] Signup/login: zod errors under fields, server errors mapped, rate-limit message, no token in storage
   [ ] /shops shows the OSM map with attribution and the "coming soon" notice, and no fake shops
   [ ] check-i18n passes; no banned words in src/i18n
+  [ ] Balance panel shows numbers from the API only; wording never says why and never assumes carry-over
+  [ ] Tracker shows the same numbers as each month's report; "Start next month" copies rules, not records
+  [ ] Every complaint link was opened by a person and has last_verified; external links open in a new
+      tab with rel="noopener noreferrer"; the page says RationSaathi doesn't file complaints
+  [ ] Email button sends only to the account email, handles 429/503, and hides when email is off

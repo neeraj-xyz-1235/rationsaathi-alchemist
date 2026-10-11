@@ -32,6 +32,10 @@ longer, stretch Phase 1–2. Don't add features.
 | Validation       | zod on the frontend, Pydantic on the backend, same rules | zod = instant feedback, Pydantic = the real guard |
 | Security         | Login/signup rate limits, same-origin /api proxy, CSRF origin check, CSP | Details in plan_backend.txt §6 |
 | Map (planned)    | OpenStreetMap via Leaflet, placeholder page only | Nearest ration shops later; no fake shop data now |
+| Monthly tracker  | Each saved case = one month; tracker computed on read | No new table; numbers always match the report |
+| Balance          | `balance` block from the engine (remaining, percent used) | Same difference, friendlier view; NO carry-over unless a rule says so |
+| Complaints       | Static list of official portals in the frontend + a neutral summary to copy | We never file anything; links are verified by a person |
+| Email report     | Provider's HTTPS API (Brevo suggested), account email only | Render free blocks SMTP; no user-chosen recipient = no spam relay |
 | Visual design    | The team mockup image (described in plan_frontend.txt §2) | One look across all screens |
 | NOT AWS          | —                                             | IAM/VPC/RDS setup eats hours and judges get nothing extra            |
 | NOT Streamlit    | —                                             | It would replace our React UI and can't do the guided multilingual flow |
@@ -53,6 +57,9 @@ of truth. Section 7 of context.txt still describes the math correctly. Only its 
       |
       |-- /api/auth/* ---------------> FastAPI --> users + sessions (argon2id, HttpOnly cookie, rate limits)
       |-- /api/shops/nearby ---------> FastAPI --> placeholder: "planned", [] (map = OSM tiles in browser)
+      |-- /api/tracker, next-month --> FastAPI --> saved cases → same engine → months + balance
+      |-- /api/reports/{id}/email ---> FastAPI --> email provider (HTTPS) → the user's own inbox
+      |-- /complaints ---------------> static list of official portals (frontend only; we file nothing)
       |
       |-- POST /api/receipt/parse --> FastAPI --> Claude: segments the text into fields
       |                                      \--> regex fallback (no key / timeout / bad output)
@@ -80,16 +87,20 @@ of truth. Section 7 of context.txt still describes the math correctly. Only its 
 6. The backend returns codes and numbers. The frontend turns them into sentences in en/hi/mr.
 7. Differences are always shown with their sign and explained. Receiving MORE than expected is
    not an error either.
+8. A balance is the same difference seen another way. We never say why a balance exists, and
+   we never assume unused ration carries over. Each month is compared with its own rule only.
+9. RationSaathi is an independent tool, not a government service. We link to official portals
+   but never file or submit anything for anyone.
 
 
 ## 4. Who owns what
 
 | Person | Owns                                                                                           |
 |--------|------------------------------------------------------------------------------------------------|
-| M      | Theme from the mockup, component library, i18n, router, API client + mocks, Home, Report, Login/Signup (zod), saved checks |
-| A      | Entry wizard (zod schemas): family + period, rules, records, receipt paste → confirm, review; /shops map placeholder |
-| G      | Neon DB + all tables, schemas.py (API contract), calculation engine + classifier + tests, cases/reports API with ownership checks |
-| N (me) | Repo scaffold, git, CI, deploys + Vercel proxy + security headers, auth + rate limiting + security tests, receipt parser, demo |
+| M      | Theme from the mockup, component library, i18n, router, API client + mocks, Home, Report, Login/Signup (zod), tracker, balance panel, email button |
+| A      | Entry wizard (zod schemas): family + period, rules, records, receipt paste → confirm, review; /shops map placeholder; /complaints page + verified link list |
+| G      | Neon DB + all tables, schemas.py (API contract), calculation engine + classifier + tests, cases/reports API with ownership checks, balance, tracker, next-month |
+| N (me) | Repo scaffold, git, CI, deploys + Vercel proxy + security headers, auth + rate limiting + security tests, receipt parser, email sending, demo |
 
 Single owners for shared things, to avoid merge fights:
   - API contract (plan_backend.txt §2 / backend/app/schemas.py): G. To change it, post in team
@@ -112,6 +123,23 @@ Single owners for shared things, to avoid merge fights:
 | 5:30–6:00  | Rehearse the demo (2 runs), README, warm up the backend 3 min before presenting                            |
 
 
+## 5b. Phase B — balance, tracker, complaints, email (start only after Checkpoint 2)
+
+Be honest about time: Phase A above already fills about 6 hours. Phase B is roughly 7 more
+person-hours spread over four people, so it only fits if Phase A is on time. If Phase A slips,
+Phase B is cut in the order below, and nothing in Phase A is touched.
+
+| Order | Feature                         | G      | M      | A      | N      |
+|-------|---------------------------------|--------|--------|--------|--------|
+| 1     | Balance (report panel)          | in the Phase A engine slot | 45 min | —      | —      |
+| 2     | Complaints page (static links)  | —      | —      | 60 min + 20 min summary | —      |
+| 3     | Monthly tracker + next month    | 60 min | 90 min | —      | —      |
+| 4     | Email the report                | —      | 30 min | —      | 90 min |
+| 5     | Grievance notes (optional diary)| 30 min | 45 min | —      | —      |
+
+Freeze moves from 4:30 to 5:15 only if Phase B items 1–3 are done by then. If the event is longer
+than 6 hours, add the extra time here, not to Phase A.
+
 ## 6. Demo scenario (used in mocks, tests and the live demo)
 
 Use a period that has ALREADY ENDED, so "shortfall" is allowed. If the period is still running,
@@ -132,13 +160,22 @@ the engine correctly says "unclear: period not ended", which makes a weaker demo
     Wheat: 4 × 2.5 kg = 10 kg | 10 kg | 10 kg − 10 kg = 0 kg                → no difference
     Evidence: 2 records with a receipt number, 1 with pasted receipt text, 1 note-only
 
+  Tracker + balance demo data (seeded, plan_db_schema.txt §5):
+    household "Home": Jul 2026 rice 12 of 20 kg, Aug 2026 rice 20 of 20 kg, Sep 2026 = the case above
+    household "Grandparents" (2 members, rice 5 kg per member), Oct 2026 ONGOING: 7 of 10 kg received
+      → remaining 3 kg, "70.0" percent, wording "still to be collected", label "unclear" (period not ended)
+    The "7 of 10 kg" example from the brief is this Grandparents month.
+
   Report sentence (Rice):
     "Confirmed records for Rice total 14 kg against an expected entitlement of 20 kg for
      1–30 Sep 2026, a difference of 6 kg. The reason for this difference has not been established."
 
   Demo talking points: (1) the AI suggestion needs user confirmation; (2) the date "03/09" is
   ambiguous and gets resolved using the period, with the reason shown; (3) line-by-line math;
-  (4) evidence for every line; (5) switch to Hindi/Marathi; (6) neutral wording; (7) print.
+  (4) evidence for every line; (5) switch to Hindi/Marathi; (6) neutral wording; (7) print;
+  (8) balance bar: "7 of 10 kg recorded, 3 kg still to be collected", with no carry-over assumed;
+  (9) the monthly tracker across Jul–Oct; (10) the complaints page: official links, "we file
+  nothing", copy a neutral summary; (11) email the report to your own inbox.
 
 
 ## 7. Definition of done (whole team)
@@ -154,17 +191,25 @@ the engine correctly says "unclear: period not ended", which makes a weaker demo
 - [ ] Login lockout after 5 failures; the session cookie is HttpOnly; security headers are present.
 - [ ] /shops shows the OSM map (with attribution) and "coming soon", with no invented shops.
 - [ ] Screens match the mockup.
+- [ ] Phase B (whatever shipped): balance numbers come from the API; tracker numbers equal each
+      month's report; every complaint link was opened by a person; email goes only to the
+      account address and carries the footer; nothing says why a balance exists.
 
 
 ## 8. Cut list (if behind, drop features in this order)
 
-1. Map placeholder → just the Home banner "coming soon" with no map page.
-2. "late" label and the due-by date field.
-3. Editing a record (keep add + delete).
-4. Claude extractor (keep the regex parser).
-5. My saved checks list (keep save + share link).
-6. Accounts + saving as a whole. The guest flow via /api/calculate is the product.
+1. Grievance notes (optional diary).
+2. Tracker compare table (keep the list of months).
+3. Map placeholder → just the Home banner "coming soon" with no map page.
+4. Email the report.
+5. Complaints page → shrink to a short list of 2–3 verified links on the Help page.
+6. "late" label and the due-by date field.
+7. Editing a record (keep add + delete).
+8. Claude extractor (keep the regex parser).
+9. Tracker → a plain list of saved cases without balances (keep save + share link).
+10. Accounts + saving as a whole. The guest flow via /api/calculate is the product.
    If auth ships, ALL of plan_backend.txt §6 ships with it. Never ship a login without the
    rate limits and cookie flags.
 NEVER cut: confirm-before-count, line-by-line math, evidence per record, neutral wording,
-the 3 languages.
+the 3 languages, and the balance panel (it's one extra block of the same calculation).
+If the complaint links ship, a person must have opened every one of them.

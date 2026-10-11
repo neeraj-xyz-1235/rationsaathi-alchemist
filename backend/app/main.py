@@ -1,23 +1,18 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-
-from app.config import settings
-from app.routers import auth, calculate, cases, receipt, reports, shops
-
-app = FastAPI(
-    title="RationSaathi API",
-    docs_url="/docs" if settings.enable_docs else None,
-    redoc_url=None,
-    openapi_url="/openapi.json" if settings.enable_docs else None,
-)
-
-for module in (auth, calculate, cases, receipt, reports, shops):
-    app.include_router(module.router)
+from app.db.session import engine, Base
+from app.db import models  # noqa: F401  (registers the tables)
 
 
-@app.get("/api/health")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
 def health():
-    return {
-        "status": "ok",
-        "db": "ok",  # TODO (G): real DB check
-        "llm": "configured" if settings.anthropic_api_key else "not_configured",
-    }
+    return {"ok": True}

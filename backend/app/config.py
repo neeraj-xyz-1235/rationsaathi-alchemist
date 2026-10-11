@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     enable_docs: bool = True
     seed_password: str = ""
+    email_api_key: str = ""
+    email_from: str = ""
 
 
 settings = Settings()

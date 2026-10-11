@@ -84,7 +84,11 @@ CREATE TABLE cases (
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   CHECK (period_end >= period_start)
 );
-CREATE INDEX cases_user_id_idx ON cases (user_id);
+CREATE INDEX cases_user_period_idx ON cases (user_id, period_start);
+-- MONTHLY TRACKING needs no extra table: one case = one period (normally a month). The tracker
+-- lists a user's cases by household_ref and period_start, and runs each through the engine on read.
+-- "Start next month" creates a new case that copies members + rules (see plan_backend.txt §2.7).
+-- Balance (remaining / percent used) is also computed on read and never stored, so it can't go stale.
 
 CREATE TABLE entitlement_rules (
   case_id        UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
@@ -128,6 +132,39 @@ CREATE TABLE reports (
 );
 CREATE INDEX reports_case_id_idx ON reports (case_id);
 
+-- ── Email log (Phase B) ──────────────────────────────────────────────────
+
+CREATE TABLE email_log (
+  id           BIGSERIAL PRIMARY KEY,               -- (Integer autoincrement in SQLAlchemy)
+  user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  report_id    UUID REFERENCES reports(id) ON DELETE SET NULL,
+  kind         TEXT NOT NULL CHECK (kind IN ('report')),
+  status       TEXT NOT NULL CHECK (status IN ('queued', 'sent', 'failed')),
+  error_code   TEXT,                                -- provider/HTTP error class only, never a message body
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX email_log_user_idx ON email_log (user_id, created_at);
+-- The email limits (3/hour and 10/day per user, 30/hour overall) are counted from this table,
+-- and every attempt counts, whatever its status. We store no recipient address (it is always the
+-- user's own account email) and no body. Rows older than 7 days are deleted on each send.
+
+-- ── Grievance notes (Phase B, OPTIONAL — cut first) ──────────────────────
+
+CREATE TABLE grievance_notes (
+  id            UUID PRIMARY KEY,
+  case_id       UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+  portal_key    TEXT NOT NULL,                      -- app checks ^[a-z0-9_-]{1,40}$ (a regex CHECK isn't portable to SQLite)
+  reference_no  TEXT CHECK (char_length(reference_no) <= 60),
+  filed_on      DATE,
+  status        TEXT NOT NULL CHECK (status IN ('prepared', 'filed', 'resolved', 'closed')),
+  note          TEXT CHECK (char_length(note) <= 500),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX grievance_notes_case_idx ON grievance_notes (case_id);
+-- This is the user's own diary. We never contact a government portal or file anything for them.
+-- The UI warns: don't put ID numbers in notes.
+
 -- ── PLANNED (do NOT create during the hackathon) — nearest ration shops ──
 
 -- CREATE TABLE ration_shops (
@@ -156,7 +193,8 @@ Notes:
     rules, then insert records. Order matters because of the FK.
   - extraction JSONB lets the report show "AI suggested 8 kg / 03-09; user confirmed 8 kg /
     2026-09-03". That is a strong transparency point for the demo.
-  - Deleting a user cascades to their sessions, cases, rules, records and reports.
+  - Deleting a user cascades to their sessions, cases, rules, records, reports, email_log and
+    grievance_notes (the last through cases).
 
 
 ## 3. Mapping API ↔ DB (in routers/cases.py)
@@ -167,6 +205,8 @@ Notes:
   API period.{start,end}                       ⇄  period_start, period_end
   case.user_id                                 ⇐  current_user.id (NEVER taken from the request body)
   Reuse engine/units.py for the conversion. Never write a second converter.
+  Tracker + balance: the router loads the user's cases, converts each ORM case into the API Case
+  object with this same mapping, and calls the engine. There is no second code path for numbers.
 
 
 ## 4. Privacy (state this in the README and the demo)
@@ -178,6 +218,11 @@ Notes:
     and /api/receipt/parse are stateless.
   - Saved cases are visible only to their owner. Report links are public to whoever holds them,
     and the share screen says so.
+  - Emailing a report sends only to the user's own account address. We store that an email was
+    sent (email_log) but never its body or recipient. Email addresses aren't verified yet (known
+    limitation, noted in the README).
+  - Grievance notes are private to their owner and hold only what the user types. We don't
+    submit anything anywhere.
   - Location for the map (planned) is used in the browser only. It is never sent to or stored by
     the backend, except as the lat/lon of a nearby-shops query, which isn't logged.
   - Seed/demo data is fictional.
@@ -192,4 +237,11 @@ Notes:
   3. Give it to N to set as DATABASE_URL on Render. Never commit it.
   4. Local: leave DATABASE_URL unset → SQLite. To test against Neon locally, put it in backend/.env.
   5. python -m app.db.seed → creates demo user demo@rationsaathi.test with a password read from
-     the SEED_PASSWORD env var (not hard-coded), plus the demo case.
+     the SEED_PASSWORD env var (not hard-coded), plus these demo cases so the tracker has data:
+       - household "Home", 4 members, rice 5 kg per member + wheat 2.5 kg per member:
+           Sep 2026 = the demo case in plan_overview.txt §6 (rice 14 of 20 kg)
+           Aug 2026 = rice 20 of 20 kg, wheat 10 of 10 kg
+           Jul 2026 = rice 12 of 20 kg (balance 8 kg), wheat 10 of 10 kg
+       - household "Grandparents", 2 members, rice 5 kg per member:
+           Oct 2026 (ongoing) = 7 kg received on 2026-10-04, so 7 of 10 kg, remaining 3 kg, "70.0"
+     All fictional, all with a receipt reference or a note.

@@ -15,11 +15,17 @@ backend/
       units.py           "2.5" kg → 2500 g (int) and back, no rounding            (G)
       calculator.py      expected / received / difference per rule                (G)
       classifier.py      labels + reason codes (§3)                               (G)
+      balance.py         remaining / over_by / percent_used per item (§3.5)       (G)
+      tracker.py         month list per household + next-month date shifting (§2.7) (G)
     parser/
       normalize.py       units, item synonyms, Devanagari digits, date logic      (N)
       regex_parser.py    fallback extractor                                       (N)
       llm_parser.py      Claude extractor                                         (N)
       service.py         try Claude → validate → else regex → normalize           (N)
+    email/
+      sender.py          sends through the provider's HTTPS API, 10 s timeout      (N)
+      strings.py         en/hi/mr strings for the email (§6.9)                     (N)
+      templates/report.html.j2   report.txt.j2   Jinja2, autoescape ON            (N)
     auth/
       passwords.py       argon2id hash/verify                                     (N)
       sessions.py        create / look up / revoke session tokens                 (N)
@@ -33,15 +39,16 @@ backend/
       models.py          SQLAlchemy tables (plan_db_schema.txt)                   (G)
       seed.py            demo user + demo case                                    (G)
     routers/
-      calculate.py  receipt.py  cases.py  reports.py  auth.py  shops.py
+      calculate.py  receipt.py  cases.py  reports.py  auth.py  shops.py  tracker.py  grievances.py
   tests/
     test_units.py  test_calculator.py  test_classifier.py  test_parser.py
-    test_auth.py  test_security.py  test_api.py
+    test_auth.py  test_security.py  test_api.py  test_balance.py  test_tracker.py  test_email.py
     fixtures/receipts.json   sample receipt texts + expected suggestions
   requirements.txt     fastapi, uvicorn[standard], pydantic>=2, pydantic-settings, email-validator,
-                       sqlalchemy>=2, psycopg[binary], anthropic, argon2-cffi, pytest, httpx
+                       sqlalchemy>=2, psycopg[binary], anthropic, argon2-cffi, jinja2, pytest, httpx
   .env.example         DATABASE_URL=, ANTHROPIC_API_KEY=, LLM_MODEL=claude-opus-5-5,
-                       APP_ORIGIN=http://localhost:5173, COOKIE_SECURE=false, ENABLE_DOCS=true
+                       APP_ORIGIN=http://localhost:5173, COOKIE_SECURE=false, ENABLE_DOCS=true,
+                       EMAIL_API_KEY=, EMAIL_FROM=
 
 Run locally:  cd backend && python -m venv .venv && .venv\Scripts\activate
               pip install -r requirements.txt && uvicorn app.main:app --reload
@@ -65,13 +72,15 @@ Conventions:
       { "error": { "code": "VALIDATION_FAILED", "fields": { "email": "EMAIL_INVALID" } } }
       { "error": { "code": "RATE_LIMITED", "retry_after_s": 840 } }        + Retry-After header
     Codes: VALIDATION_FAILED, UNAUTHENTICATED, INVALID_CREDENTIALS, EMAIL_UNAVAILABLE,
-    RATE_LIMITED, NOT_FOUND, PAYLOAD_TOO_LARGE, BAD_ORIGIN, INTERNAL. A 500 never includes a
+    RATE_LIMITED, NOT_FOUND, PAYLOAD_TOO_LARGE, BAD_ORIGIN, EMAIL_NOT_CONFIGURED, EMAIL_FAILED,
+    CASE_EXISTS_FOR_PERIOD, INTERNAL. A 500 never includes a
     stack trace or exception text.
 
 Who can call what:
   public (guests)     /api/health, /api/calculate, /api/receipt/parse, /api/reports/{id},
                       /api/shops/nearby, /api/auth/signup, /api/auth/login
-  logged in           /api/auth/me, /api/auth/logout, /api/cases/*, POST /api/cases/{id}/reports
+  logged in           /api/auth/me, /api/auth/logout, /api/cases/*, POST /api/cases/{id}/reports,
+                      /api/tracker, POST /api/reports/{id}/email
   The core check (enter → calculate → report → print) works WITHOUT an account. An account is
   only needed to save cases and create share links. Don't force a login on people who just
   want to check their ration.
@@ -140,6 +149,7 @@ Request: Case object. Response 200:
                                  { "record_id": "d2", "value": "6" } ] },
       "difference": { "value": "6", "direction": "below" },   // value = expected − received (signed)
                                                               // direction: below | equal | above
+      "balance":    { "remaining": "6", "over_by": "0", "percent_used": "70.0", "phase": "ended" },  // §3.5
       "excluded":   [ ],                                      // [{ "record_id": "...", "reason": "OUTSIDE_PERIOD" }]
       "labels":     [ { "code": "shortfall", "reason": "CONFIRMED_TOTAL_BELOW_EXPECTED",
                         "record_ids": [] } ]
@@ -149,6 +159,7 @@ Request: Case object. Response 200:
       "expected":   { "value": "10", "basis": "per_member", "members": 4, "per_unit": "2.5" },
       "received":   { "value": "10", "terms": [ { "record_id": "d3", "value": "10" } ] },
       "difference": { "value": "0", "direction": "equal" },
+      "balance":    { "remaining": "0", "over_by": "0", "percent_used": "100.0", "phase": "ended" },
       "excluded":   [ ],
       "labels":     [ { "code": "no_difference", "reason": "CONFIRMED_TOTAL_EQUALS_EXPECTED",
                         "record_ids": [] } ]
@@ -208,7 +219,8 @@ The endpoint never saves anything. Suggestions become records only after the use
   DELETE /api/cases/{id}                           → 204 (also deletes its reports)
   POST /api/cases/{id}/reports                     → 201 { "report_id": "<uuid>", "case": Case, "result": <2.2 response> }
   GET  /api/reports/{report_id}    (public)        → 200 { "report_id", "generated_at", "case", "result" }
-  GET  /api/health                                 → 200 { "status": "ok", "db": "ok", "llm": "configured" | "not_configured" }
+  GET  /api/health                                 → 200 { "status": "ok", "db": "ok", "llm": "configured" | "not_configured",
+                                                       "email": "configured" | "not_configured" }
 
   - Ownership: every /api/cases/{id} route loads the case WHERE id = :id AND user_id = :me.
     If it doesn't exist OR belongs to someone else, return 404 (not 403), so we don't reveal
@@ -246,6 +258,67 @@ The endpoint never saves anything. Suggestions become records only after the use
   - Validates lat (−90..90), lon (−180..180), radius_km (1..25). Doesn't store or log coordinates.
   - NEVER returns invented shops. An empty list plus "planned" is the honest answer until we
     have a real data source. Planned design: plan_db_schema.txt §2 (ration_shops).
+
+
+### 2.7 Monthly tracker (login required)
+
+A "month" is just a saved case whose period is that month. No new table is needed.
+
+  GET  /api/tracker?months=6          → 200   (computed on read; nothing extra is stored)
+  { "households": [
+      { "household_ref": "Home",                      // null if the user left it empty
+        "months": [
+          { "case_id": "<uuid>", "period": { "start": "2026-10-01", "end": "2026-10-31", "status": "ongoing" },
+            "items": [ { "item": "Rice", "unit": "kg", "expected": "10", "received": "7",
+                         "remaining": "3", "over_by": "0", "percent_used": "70.0",
+                         "labels": ["unclear"] } ] } ] } ] }
+  - Groups the user's cases by household_ref (null and "" are the same household), newest month
+    first. months = 1..24, default 6. Each case runs through the SAME engine as /api/calculate,
+    so tracker numbers always equal the report's. A case with no rules returns items: [].
+  - The phase (ongoing / ended) uses today's date.
+
+  POST /api/cases/{id}/next-month     → 201 { "id": "<new case uuid>" }
+  - Copies household_ref, members and rules into a NEW case for the following month. Records are
+    NOT copied. Ownership check as usual (404 otherwise).
+  - Dates move forward one month, calendar-aware (tracker.py, plain `calendar.monthrange`, no
+    extra dependency): 1–30 Sep → 1–31 Oct; 1–31 Jan → 1–28 Feb; a period that is not a whole
+    month (15 Sep–14 Oct) moves by one month and keeps its day numbers (15 Oct–14 Nov), with day
+    numbers clamped to the month's length. due_by dates shift the same way.
+  - 409 CASE_EXISTS_FOR_PERIOD if the user already has a case with the same household_ref and
+    period_start.
+  - CARRY-OVER IS NOT APPLIED. Unused ration from one month is not added to the next. Each month
+    is compared only with its own entered rule (golden rule 3: apply only the rules the user
+    entered, and we have no carry-over rule field). The tracker shows months side by side and
+    nothing more. If we ever add carry-over it must be an explicit user-entered rule.
+
+### 2.8 Email a report (login required)
+
+  POST /api/reports/{report_id}/email     body { "lang": "en" | "hi" | "mr" }
+  → 202 { "status": "queued", "sent_to": "s***@gmail.com" }       (masked address)
+  → 404 if the report's case isn't yours, 429 RATE_LIMITED, 503 EMAIL_NOT_CONFIGURED
+  - The recipient is ALWAYS the logged-in user's own account email. The request has no "to"
+    field. Otherwise our server becomes a free spam relay. "Send to another address" (e.g. to a
+    local office) is planned for after email verification.
+  - The send runs in a FastAPI BackgroundTask so the request returns at once. Each attempt is
+    recorded in email_log with status sent or failed.
+  - Needs a saved report (reports table), because the email is built from the frozen snapshot.
+  - Provider, safety rules and content: §6.9.
+
+### 2.9 Grievance notes (login required) — OPTIONAL, first thing to cut
+
+The user's own diary of any complaint they raise. We never contact a government portal and never
+file anything for them.
+  GET    /api/cases/{id}/grievances                        → 200 [ { ...note } ]
+  POST   /api/cases/{id}/grievances                        → 201 { "id": "<uuid>" }
+  PUT    /api/cases/{id}/grievances/{gid}                  → 200
+  DELETE /api/cases/{id}/grievances/{gid}                  → 204
+  body: { "portal_key": "cpgrams", "reference_no": "ABC123" | null, "filed_on": "2026-10-03" | null,
+          "status": "prepared" | "filed" | "resolved" | "closed", "note": "..." | null }
+  portal_key: [a-z0-9_-]{1,40} (it matches a key in the frontend's complaint-links file, but the
+  backend doesn't check that). reference_no ≤ 60 chars, note ≤ 500 chars.
+
+The complaint LINKS themselves are a static file in the frontend (plan_frontend.txt §11.3). The
+backend has no endpoint for them.
 
 
 ## 3. Engine rules — G
@@ -293,6 +366,33 @@ invent a rule for them.
  12. Litres recorded against a kg rule → excluded UNIT_MISMATCH
  13. per_household rule ignores members
 
+
+### 3.5 Balance (engine/balance.py)
+
+The "balance" is the user-friendly view of the same difference. It is not a new calculation, and
+it never changes labels (§3.3).
+  remaining    = max(expected − received, 0)     base ints → from_base()
+  over_by      = max(received − expected, 0)
+  percent_used = floor(received × 1000 / expected) / 10, as a string with one decimal ("70.0")
+                 - integer maths only. DISPLAY ONLY (drives the progress bar), never used for labels.
+                 - floored, never rounded up, so 2.999 of 3 kg shows "99.9", never "100.0".
+                 - can exceed 100 (received more than expected). expected is always > 0.
+  phase        = the period's status, "ongoing" | "ended"
+  Consistency: when direction is "below", remaining == difference.value.
+  Wording (frontend): ongoing → "still to be collected"; ended → "not recorded as collected".
+  Neither says why, and neither says whether it can be collected later. Carry-over is not assumed.
+
+Tests (tests/test_balance.py, tests/test_tracker.py, tests/test_email.py):
+ 14. 7 of 10 kg → remaining "3", over_by "0", percent_used "70.0"
+ 15. 10 of 10 → remaining "0", percent "100.0"; 12 of 10 → remaining "0", over_by "2", percent "120.0"
+ 16. 2.999 of 3 kg → "99.9" (floor); 1 g of 20 kg → "0.0"; pending records are not in received
+ 17. tracker: 3 cases for one household + 1 for another → grouped by household_ref, newest first;
+     numbers equal /api/calculate for each case
+ 18. next-month: 1–30 Sep → 1–31 Oct; 1–31 Jan 2027 → 1–28 Feb 2027; 15 Sep–14 Oct → 15 Oct–14 Nov;
+     records not copied; rules copied; second call → 409; someone else's case → 404
+ 19. email (with the provider mocked): report of another user → 404; recipient is always the
+     account email; the 4th send within an hour → 429; "<script>" in an item name comes out
+     escaped in the HTML; neutral-word check passes on all rendered output; no API key → 503
 
 ## 4. Receipt parser — N
 
@@ -399,6 +499,8 @@ invent a rule for them.
   | Signup, per IP          | 5 / hour                                           | auth_attempts DB |
   | /api/receipt/parse      | 10 / min per IP, 30 / min per logged-in user       | in-memory        |
   | /api/calculate          | 60 / min per IP                                    | in-memory        |
+  | Email a report, per user | 3 / hour, 10 / day                                 | email_log DB     |
+  | Email, whole app         | 30 / hour (stays inside the provider's free tier)  | email_log DB     |
   | Everything else         | 120 / min per IP                                   | in-memory        |
   - Login/signup limits are in the DB so they survive restarts and redeploys. The rest are
     in-memory sliding windows (a dict of deques in rate_limit.py). That's fine because the Render
@@ -442,6 +544,39 @@ invent a rule for them.
   - password "password1234" → PASSWORD_TOO_COMMON
 
 
+### 6.9 Email — provider and safety rules (N)
+
+Provider:
+  - Render's free tier blocks outbound SMTP (verify this on the day), so send through a
+    provider's HTTPS API using httpx (already a dependency), 10 s timeout. No SMTP.
+  - Candidates: Brevo (free daily quota, verify one sender address, no domain needed) or Resend
+    (needs a verified domain before it will send to anyone but you). Recommended: Brevo. N creates
+    the account and verifies the sender address EARLY (in the 0:30–1:15 slot), because
+    verification can take time. N also re-checks the current free limits.
+  - Without EMAIL_API_KEY: /email returns 503 EMAIL_NOT_CONFIGURED, /api/health shows
+    "email": "not_configured", and the frontend hides the button.
+Safety:
+  - Recipient is only the account email. No user-supplied recipient, subject or body text. No
+    attachments, no remote images, no tracking pixels.
+  - HTML comes from Jinja2 with autoescape ON, so item names and notes can't inject markup.
+  - Fixed From address (EMAIL_FROM) and a fixed subject template. Never log the email body.
+  - Footer on every email: "You received this because a RationSaathi report was requested from
+    your account. RationSaathi is an independent tool and is not a government service."
+  - The email links to APP_ORIGIN/r/{report_id}, a public link to the frozen report (anyone with
+    the link can view it). The email says so.
+  - KNOWN LIMITATION: email addresses are not verified yet. Someone could sign up with another
+    person's address and trigger up to 10 emails a day to it. The caps limit the damage; email
+    verification is planned (users.email_verified_at already exists). Say so in the README.
+Content (strings.py, en/hi/mr):
+  Subject "Your RationSaathi report: {period}". Body per item: expected, received, balance
+  remaining (with units), plus the same neutral sentence the frontend shows (shortfall,
+  no_difference, above_expected, or the "so far" wording while the period is ongoing), then an
+  "Open full report" link and the footer. HTML and a plain-text version. The sentences duplicate
+  plan_frontend.txt §6. If M changes the wording there, N changes strings.py in the same PR
+  (leave a comment in both files). The neutral-language CI check covers backend/app, so it covers
+  these strings.
+No government portal is contacted by the backend, ever.
+
 ## 7. Task lists
 
 Scope note: login/security adds about 2.5 hours of backend work. The Claude extractor moved later,
@@ -450,10 +585,13 @@ and on the cut list it now comes before auth (plan_overview.txt §8).
 ### G
   [0:00–0:30] schemas.py exactly as §2 (Pydantic v2, extra="forbid"), pushed to main. This unblocks everyone.
   [0:30–1:00] Neon project (with N), db/session.py + models.py (incl. users/sessions/auth_attempts), create_all
-  [1:00–2:30] engine: units → calculator → classifier, tests 1–13 green; POST /api/calculate
+  [1:00–2:30] engine: units → calculator → classifier → balance (§3.5), tests 1–16 green; POST /api/calculate
   [2:30]      CHECKPOINT 1: /api/calculate live on Render, returns the demo result above
   [2:30–3:45] cases + reports routers with ownership checks (uses N's current_user); seed.py
   [3:45–4:30] Pair with M/A on integration and fix contract mismatches
+  [Phase B, after Checkpoint 2; see plan_overview.txt §5b]
+              tracker.py + GET /api/tracker + next-month + tests 17–18 (~1 h);
+              grievance notes endpoints (~30 min, cut first)
   [4:30–5:30] Bug fixes. Every bug becomes a new test.
 
 ### N
@@ -464,4 +602,7 @@ and on the cut list it now comes before auth (plan_overview.txt §8).
   [3:30]      tell G "current_user is ready", tell M the auth endpoints are live
   [3:30–4:15] llm_parser.py + timeout + fallback; /api/shops/nearby placeholder (10 min)
   [4:15–4:30] merge PRs; keep main deployable
+  [Phase B, after Checkpoint 2] email: sender.py, templates, strings.py, POST /api/reports/{id}/email,
+              email_log + limits, test 19, EMAIL_API_KEY on Render (~1.5 h). Cut it before
+              touching the release checklist.
   [4:30–6:00] Release + demo checklist (plan_deployment.txt §7)

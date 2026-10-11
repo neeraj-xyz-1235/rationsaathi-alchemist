@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Environments & Secrets
+.env
+.venv/
+venv/
+
+# SQLite Database artifacts (keep schema and seed scripts, ignore local db binaries)
+*.sqlite3
+*.db
+database/*.db
+
+# OS / Editor artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Frontend / Node
+node_modules/
+dist/
+.next/
