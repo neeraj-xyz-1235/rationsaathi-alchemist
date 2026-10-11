@@ -14,6 +14,7 @@ from app.auth import rate_limit as rl
 from app.auth.deps import current_user
 from app.db import models as m
 from app.auth.sessions import now
+from app.config import settings
 from app.db import mapping
 from app.db.session import get_db
 from app.documents import pdf
@@ -194,6 +195,10 @@ async def upload_receipt_proof(withdrawal_id: str, file: UploadFile = File(...),
     if reused and status == "verified":       # the same photo cannot prove two different withdrawals
         status, result = "unreadable", {**result, "reason": "PHOTO_ALREADY_USED"}
 
+    if settings.RECEIPT_PROOF_AUTO_ACCEPT and status != "verified":
+        result = {**result, "ai_status": status, "ai_reason": result.get("reason"),
+                  "auto_accepted": True, "reason": "AUTO_ACCEPTED"}
+        status = "verified"
     proof = db.get(m.WithdrawalProof, w.id)
     if proof is None:
         proof = m.WithdrawalProof(withdrawal_id=w.id, status=status, result=result, sha256=digest,

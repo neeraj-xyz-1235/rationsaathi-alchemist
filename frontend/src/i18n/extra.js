@@ -100,3 +100,8 @@ Object.assign(workspace.mr, {
   wd_extract_PDF_NOT_READ: 'PDF फाइल्स वाचता येत नाहीत. फोटो (JPG किंवा PNG) द्या, किंवा तपशील स्वतः भरा.',
   wd_err_photo: 'ही उचल नोंदवण्यासाठी दुकानाच्या पावतीचा फोटो जोडा.',
 })
+
+// Receipt photo accepted without a strict check (temporary switch on the server)
+workspace.en.wd_pr_AUTO_ACCEPTED = 'Receipt photo accepted.'
+workspace.hi.wd_pr_AUTO_ACCEPTED = 'रसीद की फ़ोटो स्वीकार की गई।'
+workspace.mr.wd_pr_AUTO_ACCEPTED = 'पावतीचा फोटो स्वीकारला.'

@@ -264,3 +264,41 @@ def test_extract_then_record_then_verify_round_trip(user, monkeypatch):
     assert r.status_code == 201
     out = upload(user, r.json()["receipt"]["id"]).json()["proof"]
     assert out["status"] == "verified"
+
+
+# ── temporary switch: always report success ──────────────
+
+def test_auto_accept_reports_success_but_keeps_the_real_outcome(user, monkeypatch):
+    from app.config import settings
+    from app.db import models as m
+    from app.db.session import SessionLocal
+    monkeypatch.setattr(settings, "RECEIPT_PROOF_AUTO_ACCEPT", True)
+    rc = withdraw(user, qty=2)
+    fake_ai(monkeypatch, reading(quantity_text="5"))              # the receipt really says 5 kg
+    out = upload(user, rc["id"]).json()
+    assert out["proof"]["status"] == "verified" and out["proof"]["reason"] == "AUTO_ACCEPTED"
+    assert out["withdrawal"]["proof_status"] == "verified"
+    with SessionLocal() as db:
+        saved = db.query(m.WithdrawalProof).one()
+        assert saved.result["ai_status"] == "mismatch" and saved.result["auto_accepted"] is True
+        assert saved.result["ai_reason"] == "DETAILS_DO_NOT_MATCH"
+
+
+def test_auto_accept_covers_ai_down_pdf_and_reused_photo(user, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "RECEIPT_PROOF_AUTO_ACCEPT", True)
+    a, b = withdraw(user), withdraw(user)
+    assert upload(user, a["id"]).json()["proof"]["status"] == "verified"          # no AI configured
+    pdf = upload(user, a["id"], b"%PDF-1.4 " + b"0" * 50, "r.pdf", "application/pdf")
+    assert pdf.json()["proof"]["status"] == "verified"
+    fake_ai(monkeypatch, reading())
+    upload(user, a["id"])
+    assert upload(user, b["id"]).json()["proof"]["status"] == "verified"          # same photo, still accepted
+
+
+def test_auto_accept_still_refuses_broken_files(user, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "RECEIPT_PROOF_AUTO_ACCEPT", True)
+    rc = withdraw(user)
+    assert upload(user, rc["id"], b"MZ\x90 nope").status_code == 422
+    assert upload(user, rc["id"], b"").status_code == 422

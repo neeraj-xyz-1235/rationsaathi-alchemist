@@ -17,6 +17,7 @@ os.environ["LLM_API_KEY"] = ""
 os.environ["LLM_MODEL"] = ""
 os.environ["EMAIL_API_KEY"] = ""
 os.environ["PROOF_AUTO_ACCEPT"] = "false"      # tests exercise the real decision
+os.environ["RECEIPT_PROOF_AUTO_ACCEPT"] = "false"
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

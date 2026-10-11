@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     LLM_VISION_MODEL: str = ""
     VISION_TIMEOUT_S: float = 60.0
     PROOF_AUTO_ACCEPT: bool = True
+    # Same idea for the shop-receipt photo on a withdrawal: report it as verified whatever the check
+    # finds. The real outcome is kept in the saved result ("ai_status"). Set to false to enforce it.
+    RECEIPT_PROOF_AUTO_ACCEPT: bool = True
     APP_ORIGIN: str = "http://localhost:5173"      # several allowed: comma separated
     COOKIE_SECURE: bool = False
     ENABLE_DOCS: bool = True
