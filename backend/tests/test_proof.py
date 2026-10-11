@@ -264,3 +264,16 @@ def test_auto_accept_still_refuses_bad_files(user, monkeypatch):
     monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
     assert upload(user, b"MZ\x90\x00 not an image", "card.jpg", "image/jpeg").status_code == 422
     assert upload(user, b"").status_code == 422
+
+
+def test_auto_accept_unsticks_older_review_rows(user, monkeypatch):
+    from app.config import settings
+    from app.db import models as m
+    from app.db.session import SessionLocal
+    with SessionLocal() as db:
+        h = db.query(m.Household).one()
+        h.proof_status = "needs_review"
+        db.commit()
+    assert user.get("/api/household/profile").json()["profile"]["proof_status"] == "needs_review"
+    monkeypatch.setattr(settings, "PROOF_AUTO_ACCEPT", True)
+    assert user.get("/api/household/profile").json()["profile"]["proof_status"] == "verified"

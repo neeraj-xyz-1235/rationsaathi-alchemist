@@ -7,8 +7,8 @@ from app.config import settings
 from app.db import models  # noqa: F401  (registers the tables)
 from app.db.session import Base, engine
 from app.errors import install_error_handlers
-from app.routers import (auth, calculate, cases, grievances, health, household, receipt, reports,
-                         shops, tracker)
+from app.routers import (auth, calculate, cases, entitlements, grievances, health, household,
+                         receipt, reports, shops, tracker, withdrawals)
 from app.security.middleware import SecurityMiddleware
 
 
@@ -50,3 +50,5 @@ app.include_router(shops.router)
 app.include_router(tracker.router)
 app.include_router(grievances.router)
 app.include_router(household.router)
+app.include_router(entitlements.router)
+app.include_router(withdrawals.router)

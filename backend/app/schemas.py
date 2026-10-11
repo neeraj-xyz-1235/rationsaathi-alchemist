@@ -434,3 +434,22 @@ class HouseholdProfileIn(Strict):
         if v is not None and not (len(v) == 4 and v.isdigit()):
             raise ValueError("CARD_LAST4_INVALID")
         return v
+
+
+# ── Withdrawals (frontend withdrawal page) ───────────────
+
+from decimal import Decimal  # noqa: E402
+
+
+class WithdrawalIn(Strict):
+    item: str = Field(min_length=1, max_length=60)
+    quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=3)
+    unit: Literal["kg", "g"] = "kg"
+    withdrawal_date: dt.date
+    receipt_reference: str | None = Field(None, max_length=60)
+
+    @field_validator("receipt_reference")
+    @classmethod
+    def _blank_is_none(cls, v):
+        v = (v or "").strip()
+        return v or None

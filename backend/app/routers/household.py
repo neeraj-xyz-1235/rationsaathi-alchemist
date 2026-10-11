@@ -26,6 +26,14 @@ def household_size(h: m.Household) -> int:
     return max(1, len(h.members or []))
 
 
+def effective_proof_status(h: m.Household) -> str:
+    """With PROOF_AUTO_ACCEPT on, a proof an earlier check left in review/rejected counts as
+    verified too, so rows saved before the switch was turned on are not stuck."""
+    if settings.PROOF_AUTO_ACCEPT and h.proof_status in ("needs_review", "rejected"):
+        return "verified"
+    return h.proof_status
+
+
 def profile_out(h: m.Household) -> dict:
     return {"profile": {
         "head_name": h.head_name, "head_age": h.head_age, "head_gender": h.head_gender,
@@ -34,7 +42,7 @@ def profile_out(h: m.Household) -> dict:
         "card_number_last4": h.card_number_last4,
         "members": h.members, "household_member_count": household_size(h),
         "is_complete": True,
-        "proof_status": h.proof_status, "proof_result": h.proof_result,
+        "proof_status": effective_proof_status(h), "proof_result": h.proof_result,
         "updated_at": as_utc(h.updated_at).strftime("%Y-%m-%dT%H:%M:%SZ") if h.updated_at else None,
     }}
 

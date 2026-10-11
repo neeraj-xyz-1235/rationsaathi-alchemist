@@ -212,3 +212,35 @@ class Household(Base):
             "proof_status IN ('not_submitted','verified','needs_review','rejected')",
             name="ck_household_proof_status"),
     )
+
+
+class Allocation(Base):
+    """One computed monthly allocation per account per month ('YYYY-MM')."""
+    __tablename__ = "allocations"
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    period: Mapped[str] = mapped_column(Text, primary_key=True)
+    data = mapped_column(JsonType, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+
+
+class Withdrawal(Base):
+    """A collection recorded against the month's allocation, with a server-made receipt."""
+    __tablename__ = "withdrawals"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    period: Mapped[str] = mapped_column(Text, nullable=False)          # 'YYYY-MM' of the date
+    item: Mapped[str] = mapped_column(Text, nullable=False)
+    qty_base: Mapped[int] = mapped_column(BigInteger, nullable=False)  # grams
+    withdrawal_date: Mapped[date] = mapped_column(Date, nullable=False)
+    reference: Mapped[str | None] = mapped_column(Text)               # shop's own receipt number
+    receipt_id: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    verification_code: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="recorded")
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    __table_args__ = (
+        CheckConstraint("qty_base > 0", name="ck_withdrawal_qty_pos"),
+        CheckConstraint("status IN ('recorded','cancelled')", name="ck_withdrawal_status"),
+        Index("withdrawals_user_period_idx", "user_id", "period"),
+    )
