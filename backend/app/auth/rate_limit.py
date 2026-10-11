@@ -119,7 +119,7 @@ parse_user_limiter = SlidingWindow(30, 60)   # /api/receipt/parse, per logged-in
 proof_user_limiter = SlidingWindow(10, 3600)  # proof uploads (each one costs an AI call), per user
 verify_ip_limiter = SlidingWindow(30, 60)   # receipt verification (public), per IP
 shops_ip_limiter = SlidingWindow(10, 60)    # /api/shops/nearby (third-party lookup), per IP
-receipt_proof_limiter = SlidingWindow(20, 3600)  # receipt photo checks (AI call each), per user
+receipt_proof_limiter = SlidingWindow(40, 3600)  # receipt photo checks (AI call each), per user
 ALL_LIMITERS = [receipt_proof_limiter, shops_ip_limiter, verify_ip_limiter, general_limiter, calculate_limiter, parse_ip_limiter, parse_user_limiter,
                 proof_user_limiter]
 

@@ -22,6 +22,7 @@ from app.routers.entitlements import _IST
 from app.proof import receipt_check
 from app.proof.vision import VisionUnavailable, read_receipt
 from app.routers.household import MAX_PROOF_BYTES, _sniff
+from app.parser.normalize import RawEntry, normalize_entry
 from app.schemas import WithdrawalIn
 
 router = APIRouter(prefix="/api")
@@ -106,6 +107,56 @@ def receipt_pdf(withdrawal_id: str, user: m.User = Depends(current_user),
     return Response(data, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="receipt-{w.receipt_id}.pdf"',
         "Cache-Control": "no-store"})
+
+
+@router.post("/withdrawals/extract")
+async def extract_from_receipt(file: UploadFile = File(...), user: m.User = Depends(current_user),
+                               db: Session = Depends(get_db)):
+    """Reads a shop-receipt photo and returns the fields to pre-fill the withdrawal form.
+    Nothing is saved: the household reviews the values and records the withdrawal themselves."""
+    wait = rl.receipt_proof_limiter.hit(str(user.id))
+    if wait:
+        raise rl.too_many(wait)
+    data = await file.read(MAX_PROOF_BYTES + 1)
+    if not data:
+        raise HTTPException(422, "FILE_EMPTY")
+    if len(data) > MAX_PROOF_BYTES:
+        raise HTTPException(413, "PAYLOAD_TOO_LARGE")
+    mime = _sniff(data)
+    if mime is None:
+        raise HTTPException(422, "FILE_TYPE_NOT_ALLOWED")
+    empty = {"item": None, "quantity": None, "date": None, "reference": None}
+    if mime == "application/pdf":
+        return {"extracted": None, "reason": "PDF_NOT_READ", **empty}
+    try:
+        reading = read_receipt(data, mime)
+    except VisionUnavailable:
+        return {"extracted": None, "reason": "AI_UNAVAILABLE", **empty}
+    if not reading.is_receipt:
+        return {"extracted": None, "reason": "NOT_A_RECEIPT", **empty}
+
+    today = datetime.now(_IST).date()
+    alloc = db.get(m.Allocation, (user.id, today.strftime("%Y-%m")))
+    known = [i["item"] for i in alloc.data["items"]] if alloc else ["Rice", "Wheat"]
+    entry = normalize_entry(
+        RawEntry(item_raw=reading.item_text, quantity_raw=reading.quantity_text,
+                 unit_raw=reading.unit_text, date_raw=reading.date_text,
+                 receipt_ref=reading.receipt_ref),
+        today.replace(day=1), today, known)
+    quantity = None
+    q = entry["quantity"]
+    if q is not None and q["unit"] in ("kg", "g"):
+        try:
+            _, base = to_base(q["value"], q["unit"])
+            quantity = from_base(base, "kg")                       # exact, in kg for the form
+        except UnitError:
+            quantity = None
+    item = entry["item"] if entry["item_matches_rule"] else None
+    fields = {"item": item, "quantity": quantity,
+              "date": entry["date"].isoformat() if entry["date"] else None,
+              "reference": entry["receipt_ref"]}
+    found = [k for k, v in fields.items() if v]
+    return {"extracted": fields, "reason": "READ" if found else "RECEIPT_UNREADABLE", **fields}
 
 
 @router.post("/withdrawals/{withdrawal_id}/proof")

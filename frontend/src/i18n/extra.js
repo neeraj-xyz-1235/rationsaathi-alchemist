@@ -71,3 +71,32 @@ Object.assign(workspace.mr, {
   wd_pr_AI_UNAVAILABLE: 'फोटो तपासणी सध्या उपलब्ध नाही.', wd_pr_PDF_NOT_READ: 'PDF फाइल्स जतन होतात पण वाचल्या जात नाहीत. तपासणीसाठी फोटो (JPG किंवा PNG) द्या.',
   wd_pr_PHOTO_ALREADY_USED: 'हा फोटो आधीच दुसऱ्या उचलीसाठी वापरला गेला आहे.',
 })
+
+// Receipt photo is required and pre-fills the form
+Object.assign(workspace.en, {
+  wd_photo: 'Shop receipt photo', wd_photo_note: 'Choose a clear photo of the receipt. The item, quantity and date are read from it and filled in above. The photo is not stored.',
+  wd_extracting: 'Reading your receipt…', wd_extracted_note: 'Filled in from your receipt. Please check the details above before recording.',
+  wd_extract_RECEIPT_UNREADABLE: 'We could not read the receipt. Try a clearer photo, or fill in the details yourself.',
+  wd_extract_NOT_A_RECEIPT: 'This does not look like a shop receipt. Try another photo.',
+  wd_extract_AI_UNAVAILABLE: 'The receipt reader is not available right now. Fill in the details yourself.',
+  wd_extract_PDF_NOT_READ: 'PDF files cannot be read. Use a photo (JPG or PNG), or fill in the details yourself.',
+  wd_err_photo: 'Add a photo of the shop receipt to record this withdrawal.',
+})
+Object.assign(workspace.hi, {
+  wd_photo: 'दुकान की रसीद की फ़ोटो', wd_photo_note: 'रसीद की साफ़ फ़ोटो चुनें। उससे वस्तु, मात्रा और तारीख पढ़कर ऊपर भर दी जाती हैं। फ़ोटो सहेजी नहीं जाती।',
+  wd_extracting: 'आपकी रसीद पढ़ी जा रही है…', wd_extracted_note: 'रसीद से भरा गया। दर्ज करने से पहले ऊपर का विवरण जांच लें।',
+  wd_extract_RECEIPT_UNREADABLE: 'रसीद पढ़ी नहीं जा सकी। अधिक साफ़ फ़ोटो लें, या विवरण खुद भरें।',
+  wd_extract_NOT_A_RECEIPT: 'यह दुकान की रसीद जैसी नहीं दिखती। दूसरी फ़ोटो लें।',
+  wd_extract_AI_UNAVAILABLE: 'रसीद पढ़ने की सुविधा अभी उपलब्ध नहीं है। विवरण खुद भरें।',
+  wd_extract_PDF_NOT_READ: 'PDF फ़ाइलें पढ़ी नहीं जा सकतीं। फ़ोटो (JPG या PNG) दें, या विवरण खुद भरें।',
+  wd_err_photo: 'यह निकासी दर्ज करने के लिए दुकान की रसीद की फ़ोटो जोड़ें।',
+})
+Object.assign(workspace.mr, {
+  wd_photo: 'दुकानाच्या पावतीचा फोटो', wd_photo_note: 'पावतीचा स्पष्ट फोटो निवडा. त्यातून वस्तू, प्रमाण आणि तारीख वाचून वर भरली जातात. फोटो जतन केला जात नाही.',
+  wd_extracting: 'तुमची पावती वाचत आहे…', wd_extracted_note: 'पावतीवरून भरले आहे. नोंदवण्यापूर्वी वरील तपशील तपासा.',
+  wd_extract_RECEIPT_UNREADABLE: 'पावती वाचता आली नाही. अधिक स्पष्ट फोटो घ्या, किंवा तपशील स्वतः भरा.',
+  wd_extract_NOT_A_RECEIPT: 'हे दुकानाच्या पावतीसारखे दिसत नाही. दुसरा फोटो घ्या.',
+  wd_extract_AI_UNAVAILABLE: 'पावती वाचण्याची सुविधा सध्या उपलब्ध नाही. तपशील स्वतः भरा.',
+  wd_extract_PDF_NOT_READ: 'PDF फाइल्स वाचता येत नाहीत. फोटो (JPG किंवा PNG) द्या, किंवा तपशील स्वतः भरा.',
+  wd_err_photo: 'ही उचल नोंदवण्यासाठी दुकानाच्या पावतीचा फोटो जोडा.',
+})

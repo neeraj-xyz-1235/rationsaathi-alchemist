@@ -15,7 +15,7 @@ _LOCAL_DEV_ORIGIN = re.compile(r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d{1,
 MAX_BODY = 100 * 1024
 # The one route that takes a file (ration-card proof): multipart, up to 8 MB + form overhead.
 UPLOAD_PATH = "/api/household/proof"
-_RECEIPT_PROOF = re.compile(r"^/api/withdrawals/[^/]{1,64}/proof$")
+_RECEIPT_PROOF = re.compile(r"^/api/withdrawals/([^/]{1,64}/proof|extract)$")
 MAX_UPLOAD_BODY = 9 * 1024 * 1024
 UNSAFE = {"POST", "PUT", "PATCH", "DELETE"}
 
