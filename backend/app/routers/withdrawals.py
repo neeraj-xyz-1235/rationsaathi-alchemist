@@ -5,14 +5,16 @@ import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import rate_limit as rl
 from app.auth.deps import current_user
 from app.db import models as m
+from app.db import mapping
 from app.db.session import get_db
+from app.documents import pdf
 from app.engine.units import UnitError, from_base, to_base
 from app.routers.entitlements import _IST
 from app.schemas import WithdrawalIn
@@ -80,6 +82,22 @@ def create_withdrawal(body: WithdrawalIn, user: m.User = Depends(current_user),
     db.add(w)
     db.commit()
     return {"receipt": {**_row_out(w), "verification_code": w.verification_code}}
+
+
+@router.get("/withdrawals/{withdrawal_id}/receipt.pdf")
+def receipt_pdf(withdrawal_id: str, user: m.User = Depends(current_user),
+                db: Session = Depends(get_db)):
+    wid = mapping.parse_id(withdrawal_id)
+    w = db.get(m.Withdrawal, wid) if wid else None
+    if w is None or w.user_id != user.id:
+        raise HTTPException(404, "NOT_FOUND")
+    h = db.get(m.Household, user.id)
+    data = pdf.receipt_pdf({**_row_out(w), "verification_code": w.verification_code},
+                           {"head_name": h.head_name if h else "-",
+                            "state": h.state if h else "-", "district": h.district if h else "-"})
+    return Response(data, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="receipt-{w.receipt_id}.pdf"',
+        "Cache-Control": "no-store"})
 
 
 def _limit_verify(request: Request) -> None:

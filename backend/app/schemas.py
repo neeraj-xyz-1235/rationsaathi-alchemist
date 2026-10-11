@@ -318,9 +318,9 @@ class ParseResponse(BaseModel):
 # ── Shops placeholder (2.6) and tracker (2.7) ────────────
 
 class ShopsResponse(BaseModel):
-    status: Literal["planned"]
+    status: Literal["ok", "empty", "unavailable"]
     shops: list[dict]
-    message_code: Literal["SHOPS_COMING_SOON"]
+    message_code: Literal["SHOPS_FROM_OSM", "SHOPS_NONE_MAPPED", "SHOPS_LOOKUP_FAILED"]
 
 
 class TrackerItem(BaseModel):
@@ -453,3 +453,7 @@ class WithdrawalIn(Strict):
     def _blank_is_none(cls, v):
         v = (v or "").strip()
         return v or None
+
+
+class MonthlyReportEmail(Strict):
+    month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")

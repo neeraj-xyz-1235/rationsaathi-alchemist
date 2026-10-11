@@ -243,12 +243,12 @@ def test_next_month_year_out_of_range(alice):
     assert r.status_code == 422 and r.json()["error"]["code"] == "VALIDATION_FAILED"
 
 
-# ── shops placeholder ────────────────────────────────────
+# ── shops ────────────────────────────────────────────────
 
-def test_shops_placeholder_is_honest(anon):
+def test_shops_empty_is_honest(anon):
     r = anon.get("/api/shops/nearby?lat=19.07&lon=72.87&radius_km=5")
     assert r.status_code == 200
-    assert r.json() == {"status": "planned", "shops": [], "message_code": "SHOPS_COMING_SOON"}
+    assert r.json() == {"status": "empty", "shops": [], "message_code": "SHOPS_NONE_MAPPED"}
 
 
 def test_shops_default_radius(anon):

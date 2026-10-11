@@ -32,6 +32,14 @@ def _clean_state():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_real_shop_lookups(monkeypatch):
+    """Tests never call the real Overpass API. Shop tests install their own fake."""
+    from app.routers import shops
+    shops._cache.clear()
+    monkeypatch.setattr(shops, "_fetch", lambda lat, lon, radius_km: [])
+
+
 @pytest.fixture
 def demo():
     """Fresh dict of the demo case (plan_overview.txt section 6) on every call."""

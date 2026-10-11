@@ -5,7 +5,8 @@ Providers: "brevo" (default; free daily quota, verify one sender address, no dom
 "resend" (needs a verified domain before it will send to anyone but you).
 
 Safety: the recipient is chosen by the caller (always the account's own email), the subject and
-body come from our templates, no attachments, no remote images. The body is never logged."""
+body come from our templates, no remote images, the only attachment is a PDF we make. The body is never logged."""
+import base64
 import logging
 import re
 
@@ -39,7 +40,8 @@ def _client() -> httpx.Client:        # a seam for tests
     return httpx.Client(timeout=httpx.Timeout(TIMEOUT_S))
 
 
-def send(to: str, subject: str, html: str, text: str) -> None:
+def send(to: str, subject: str, html: str, text: str,
+         attachments: list[tuple[str, bytes]] | None = None) -> None:
     if not is_configured():
         raise EmailSendError("NOT_CONFIGURED")
     name, address = _sender_address()
@@ -49,11 +51,17 @@ def send(to: str, subject: str, html: str, text: str) -> None:
         headers = {"Authorization": f"Bearer {settings.EMAIL_API_KEY}"}
         body = {"from": f"{name} <{address}>", "to": [to], "subject": subject,
                 "html": html, "text": text}
+        if attachments:
+            body["attachments"] = [{"filename": n, "content": base64.b64encode(b).decode()}
+                                   for n, b in attachments]
     else:
         url = "https://api.brevo.com/v3/smtp/email"
         headers = {"api-key": settings.EMAIL_API_KEY, "accept": "application/json"}
         body = {"sender": {"name": name, "email": address}, "to": [{"email": to}],
                 "subject": subject, "htmlContent": html, "textContent": text}
+        if attachments:
+            body["attachment"] = [{"name": n, "content": base64.b64encode(b).decode()}
+                                  for n, b in attachments]
     try:
         with _client() as client:
             resp = client.post(url, headers=headers, json=body)

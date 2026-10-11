@@ -8,6 +8,8 @@ import AuthPage from './pages/AuthPage.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import LegalPage from './pages/LegalPage.jsx'
 import WorkspacePage from './pages/WorkspacePage.jsx'
+import ReportPage from './pages/ReportPage.jsx'
+import ShopsPage from './pages/ShopsPage.jsx'
 import AccountLayout from './components/layout/AccountLayout.jsx'
 import RequireAuth from './components/layout/RequireAuth.jsx'
 import RequireHouseholdProfile from './components/layout/RequireHouseholdProfile.jsx'
@@ -46,11 +48,11 @@ export default function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/help" element={<WorkspacePage type="help" />} />
         <Route path="/check" element={<EntitlementPage />} />
-        <Route path="/report" element={<WorkspacePage type="report" />} />
+        <Route path="/report" element={<ReportPage />} />
         <Route path="/tracker" element={<MonthlyTrackerPage />} />
         <Route path="/withdrawals" element={<WithdrawalPage />} />
         <Route path="/complaints" element={<WorkspacePage type="complaints" />} />
-        <Route path="/shops" element={<WorkspacePage type="shops" />} />
+        <Route path="/shops" element={<ShopsPage />} />
       </Route></Route>
     </Route>
     <Route path="/privacy" element={<><Header onHelp={openHelp} /><LegalPage type="privacy" /><Footer /></>} />

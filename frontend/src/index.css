@@ -962,3 +962,13 @@ h1, h2, h3, p { margin-top: 0; }
 .entitlement-bottom-actions { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 @media(max-width:720px) { .eligibility-profile-card { align-items:flex-start; flex-wrap:wrap; padding:16px; } .eligibility-profile-copy { min-width:calc(100% - 70px); } .proof-status-pill { margin-left:0; } .entitlement-action-banner { align-items:flex-start; flex-direction:column; padding:17px; } .entitlement-action-banner .button { width:100%; } .entitlement-next-step { align-items:flex-start; flex-wrap:wrap; } .entitlement-next-step .button { width:100%; } .eligibility-steps { display:grid; width:100%; } .eligibility-edit-link { margin-left:auto; } }
 .setup-member-explainer { margin:-3px 0 10px; line-height:1.5; }
+
+/* report + shops pages (reuse the workspace look) */
+.report-toolbar { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:14px; margin-bottom:16px; }
+.report-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.report-month { display:grid; gap:6px; color:#647667; font-size:11px; font-weight:700; }
+.report-month input,.report-month select { padding:9px 11px; border:1px solid #dfe7df; border-radius:9px; font:inherit; background:#fff; }
+.receipt-download-link { display:grid; place-items:center; width:30px; height:30px; border-radius:8px; color:#337a49; background:#eaf5ec; text-decoration:none; }
+.receipt-download-link:hover { background:#d9eddd; }
+.shops-map { height:420px; margin-bottom:16px; border:1px solid #e7ece7; border-radius:16px; overflow:hidden; z-index:0; }
+@media(max-width:720px) { .shops-map { height:320px; } }
