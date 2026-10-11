@@ -14,7 +14,7 @@ export default function AuthPage({ mode = 'login' }) {
   const location = useLocation()
   const [values, setValues] = useState({ displayName: '', email: '', password: '', confirmPassword: '' })
   const [errors, setErrors] = useState({})
-  const [serverError, setServerError] = useState('')
+  const [serverError, setServerError] = useState(() => location.state?.reason === 'session-expired' ? 'Your session expired. Please log in again.' : location.state?.reason === 'auth-required' ? 'Please log in to access that page.' : '')
   const [busy, setBusy] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -37,21 +37,8 @@ export default function AuthPage({ mode = 'login' }) {
       const safeNext = requested && requested.startsWith('/') && !requested.startsWith('//') ? requested : '/dashboard'
       navigate(safeNext, { replace: true })
     } catch (error) {
-      // The backend answers { error: { code: 'VALIDATION_FAILED', fields: { password: 'PASSWORD_TOO_COMMON' } } }
-      // (plan_backend.txt 2.5). Turn each field code into a sentence on the matching input.
-      const fieldMessages = {
-        EMAIL_INVALID: 'Enter a valid email address.',
-        PASSWORD_TOO_SHORT: 'Use at least 10 characters.',
-        PASSWORD_TOO_LONG: 'Password must be 128 characters or fewer.',
-        PASSWORD_TOO_COMMON: t('passwordCommon'),
-        NAME_TOO_LONG: 'Name must be 50 characters or fewer.',
-      }
-      const formKey = { display_name: 'displayName' }
-      const fieldErrors = error.fields && typeof error.fields === 'object'
-        ? Object.fromEntries(Object.entries(error.fields).map(([k, v]) => [formKey[k] || k, fieldMessages[Array.isArray(v) ? v[0] : String(v)] || t('authUnavailable')]))
-        : {}
-      if (Object.keys(fieldErrors).length) setErrors(fieldErrors)
-      const code = Object.keys(fieldErrors).length ? '' : error.code === 'INVALID_CREDENTIALS' ? t('authInvalidCredentials') : error.code === 'RATE_LIMITED' ? `${t('authRateLimited')} ${Math.max(1, Math.ceil((error.retryAfter || 60) / 60))} ${t('minutes')}.` : error.code === 'EMAIL_UNAVAILABLE' ? t('emailUnavailable') : t('authUnavailable')
+      if (error.fields && typeof error.fields === 'object') setErrors(Object.fromEntries(Object.entries(error.fields).map(([k,v]) => [k, Array.isArray(v) ? v[0] : String(v)])))
+      const code = error.code === 'INVALID_CREDENTIALS' ? t('authInvalidCredentials') : error.code === 'RATE_LIMITED' ? `${t('authRateLimited')} ${Math.max(1, Math.ceil((error.retryAfter || 60) / 60))} ${t('minutes')}.` : error.code === 'EMAIL_UNAVAILABLE' ? t('emailUnavailable') : error.code === 'PASSWORD_TOO_COMMON' ? t('passwordCommon') : t('authUnavailable')
       setServerError(code)
     } finally { setBusy(false) }
   }
@@ -105,7 +92,7 @@ export default function AuthPage({ mode = 'login' }) {
           </form>
           <div className="auth-switch">{isSignup ? t('alreadyHaveAccount') : t('newToRationSaathi')} <Link to={isSignup ? '/login' : '/signup'}>{isSignup ? t('login') : t('createAccount')}</Link></div>
           <div className="auth-divider"><span>{t('or')}</span></div>
-          <Link className="guest-link" to="/check">{t('continueGuest')} <ArrowRight size={16} /></Link>
+          <Link className="guest-link" to="/">{t('backHome')} <ArrowRight size={16} /></Link>
           <p className="auth-disclaimer">{t('notGovernment')}</p>
         </div>
       </div>

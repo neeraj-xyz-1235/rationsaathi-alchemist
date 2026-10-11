@@ -53,7 +53,9 @@ export default function Home({ onNavigate }) {
         <FamilyIllustration label={t('illustrationAlt')} />
         <div className="hero-swoosh" aria-hidden="true" />
       </section>
-  <EntitlementScanner />
+
+      <EntitlementScanner />
+
       <section className="actions-section page-container" aria-labelledby="action-title">
         <div className="section-heading">
           <div>
