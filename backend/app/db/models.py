@@ -259,3 +259,18 @@ class SavedShop(Base):
     phone: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
     __table_args__ = (Index("saved_shops_user_idx", "user_id"),)
+
+
+class WithdrawalProof(Base):
+    """What the receipt photo showed, checked against the withdrawal. The photo itself is never kept."""
+    __tablename__ = "withdrawal_proofs"
+    withdrawal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("withdrawals.id", ondelete="CASCADE"), primary_key=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    result = mapped_column(JsonType)
+    sha256: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    __table_args__ = (
+        CheckConstraint("status IN ('verified','mismatch','unreadable')",
+                        name="ck_withdrawal_proof_status"),
+    )

@@ -56,6 +56,8 @@ def receipt_pdf(w: dict, household: dict) -> bytes:
     _kv(pdf, "Shop receipt ref.", w.get("reference") or "-")
     _kv(pdf, "Household head", household["head_name"])
     _kv(pdf, "Location", f'{household["district"]}, {household["state"]}')
+    _kv(pdf, "Shop receipt photo", {"verified": "Checked: matches this entry", "mismatch": "Checked: does not match",
+                                    "unreadable": "Could not be read"}.get(w.get("proof_status"), "Not attached"))
     pdf.ln(6)
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*GREY)

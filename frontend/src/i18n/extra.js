@@ -42,3 +42,32 @@ Object.assign(workspace.mr, {
   hp_reports_title: 'अहवाल काळजीपूर्वक वाचा', hp_reports_text: 'आकड्यातील फरकाची अनेक कारणे असू शकतात. निष्कर्ष काढण्यापूर्वी नोंदी आणि लागू नियम तपासा.',
   hp_privacy_title: 'तुमची गोपनीयता जपा', hp_privacy_text: 'नोट्समध्ये आधार, बँक खाते, पासवर्ड किंवा इतर अत्यंत संवेदनशील माहिती टाकू नका.', hp_privacy_link: 'गोपनीयता माहिती वाचा',
 })
+
+// Receipt-photo proof on withdrawals
+Object.assign(workspace.en, {
+  wd_photo: 'Shop receipt photo (optional)', wd_photo_note: 'A clear photo of the receipt lets us check the item and quantity. The photo is not stored.',
+  wd_proof_title: 'RECEIPT PHOTO CHECK', wd_proof_none: 'No photo', wd_proof_verified: 'Receipt matches', wd_proof_mismatch: 'Does not match', wd_proof_unreadable: 'Could not be read',
+  wd_proof_attach: 'Add receipt photo', wd_proof_checking: 'Checking…', wd_proof_err: 'The receipt photo could not be checked. Please try again.',
+  wd_pr_MATCHED: 'The item and quantity on the receipt match your entry.', wd_pr_DETAILS_DO_NOT_MATCH: 'Something on the receipt differs from your entry. Check the quantity, item and date.',
+  wd_pr_NOT_A_RECEIPT: 'This does not look like a shop receipt.', wd_pr_RECEIPT_UNREADABLE: 'The item or quantity could not be read. Try a clearer, well-lit photo.',
+  wd_pr_AI_UNAVAILABLE: 'The photo check is not available right now.', wd_pr_PDF_NOT_READ: 'PDF files are saved but not read. Use a photo (JPG or PNG) to check it.',
+  wd_pr_PHOTO_ALREADY_USED: 'This photo was already used for another withdrawal.',
+})
+Object.assign(workspace.hi, {
+  wd_photo: 'दुकान की रसीद की फ़ोटो (वैकल्पिक)', wd_photo_note: 'रसीद की साफ़ फ़ोटो से हम वस्तु और मात्रा जांच सकते हैं। फ़ोटो सहेजी नहीं जाती।',
+  wd_proof_title: 'रसीद फ़ोटो की जांच', wd_proof_none: 'फ़ोटो नहीं', wd_proof_verified: 'रसीद मेल खाती है', wd_proof_mismatch: 'मेल नहीं खाती', wd_proof_unreadable: 'पढ़ी नहीं जा सकी',
+  wd_proof_attach: 'रसीद फ़ोटो जोड़ें', wd_proof_checking: 'जांच हो रही है…', wd_proof_err: 'रसीद की फ़ोटो जांची नहीं जा सकी। कृपया फिर कोशिश करें।',
+  wd_pr_MATCHED: 'रसीद की वस्तु और मात्रा आपकी प्रविष्टि से मेल खाती है।', wd_pr_DETAILS_DO_NOT_MATCH: 'रसीद की कोई बात आपकी प्रविष्टि से अलग है। मात्रा, वस्तु और तारीख जांचें।',
+  wd_pr_NOT_A_RECEIPT: 'यह दुकान की रसीद जैसी नहीं दिखती।', wd_pr_RECEIPT_UNREADABLE: 'वस्तु या मात्रा पढ़ी नहीं जा सकी। अधिक साफ़, रोशनी वाली फ़ोटो लें।',
+  wd_pr_AI_UNAVAILABLE: 'फ़ोटो की जांच अभी उपलब्ध नहीं है।', wd_pr_PDF_NOT_READ: 'PDF फ़ाइलें सहेजी जाती हैं पर पढ़ी नहीं जातीं। जांच के लिए फ़ोटो (JPG या PNG) दें।',
+  wd_pr_PHOTO_ALREADY_USED: 'यह फ़ोटो पहले ही किसी दूसरी निकासी के लिए उपयोग हो चुकी है।',
+})
+Object.assign(workspace.mr, {
+  wd_photo: 'दुकानाच्या पावतीचा फोटो (ऐच्छिक)', wd_photo_note: 'पावतीच्या स्पष्ट फोटोमुळे आम्ही वस्तू आणि प्रमाण तपासू शकतो. फोटो जतन केला जात नाही.',
+  wd_proof_title: 'पावती फोटो तपासणी', wd_proof_none: 'फोटो नाही', wd_proof_verified: 'पावती जुळते', wd_proof_mismatch: 'जुळत नाही', wd_proof_unreadable: 'वाचता आली नाही',
+  wd_proof_attach: 'पावतीचा फोटो जोडा', wd_proof_checking: 'तपासत आहे…', wd_proof_err: 'पावतीचा फोटो तपासता आला नाही. कृपया पुन्हा प्रयत्न करा.',
+  wd_pr_MATCHED: 'पावतीवरील वस्तू आणि प्रमाण तुमच्या नोंदीशी जुळते.', wd_pr_DETAILS_DO_NOT_MATCH: 'पावतीवरील काहीतरी तुमच्या नोंदीपेक्षा वेगळे आहे. प्रमाण, वस्तू आणि तारीख तपासा.',
+  wd_pr_NOT_A_RECEIPT: 'हे दुकानाच्या पावतीसारखे दिसत नाही.', wd_pr_RECEIPT_UNREADABLE: 'वस्तू किंवा प्रमाण वाचता आले नाही. अधिक स्पष्ट, उजेडातील फोटो घ्या.',
+  wd_pr_AI_UNAVAILABLE: 'फोटो तपासणी सध्या उपलब्ध नाही.', wd_pr_PDF_NOT_READ: 'PDF फाइल्स जतन होतात पण वाचल्या जात नाहीत. तपासणीसाठी फोटो (JPG किंवा PNG) द्या.',
+  wd_pr_PHOTO_ALREADY_USED: 'हा फोटो आधीच दुसऱ्या उचलीसाठी वापरला गेला आहे.',
+})

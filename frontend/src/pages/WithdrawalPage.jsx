@@ -18,6 +18,8 @@ export default function WithdrawalPage() {
   const [verifyCode, setVerifyCode] = useState('')
   const [verification, setVerification] = useState(null)
   const [verifying, setVerifying] = useState(false)
+  const [photo, setPhoto] = useState(null)
+  const [proofBusy, setProofBusy] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -44,6 +46,25 @@ export default function WithdrawalPage() {
     .reduce((sum, row) => sum + Number(row.quantity || 0), 0)
   const remaining = Math.max(0, allocated - alreadyWithdrawn)
 
+  const proofLabel = (status) => t(`wd_proof_${status || 'none'}`)
+  const proofReason = (proof) => (proof?.reason ? t(`wd_pr_${proof.reason}`) : '')
+
+  async function sendProof(id, file) {
+    const form = new FormData()
+    form.append('file', file)
+    const result = await apiPost(`/api/withdrawals/${id}/proof`, form)
+    return result?.proof
+  }
+
+  async function attachLater(id, file) {
+    if (!file) return
+    setError('')
+    setProofBusy(id)
+    try { await sendProof(id, file); await load() }
+    catch (proofError) { setError(proofError.status === 429 ? t('sh_err_many') : t('wd_proof_err')) }
+    finally { setProofBusy('') }
+  }
+
   async function submit(event) {
     event.preventDefault()
     setError('')
@@ -67,7 +88,12 @@ export default function WithdrawalPage() {
         receipt_reference: values.reference.trim() || undefined,
       })
       const receipt = result?.receipt || result
-      setSuccess(receipt)
+      let proof = null
+      if (photo && receipt?.id) {
+        try { proof = await sendProof(receipt.id, photo) } catch { proof = { status: 'unreadable', reason: 'AI_UNAVAILABLE' } }
+      }
+      setSuccess({ ...receipt, proof })
+      setPhoto(null)
       setValues(EMPTY)
       window.dispatchEvent(new Event('rationsaathi:changed'))
       await load()
@@ -100,12 +126,12 @@ export default function WithdrawalPage() {
     {loading ? <div className="workspace-panel loading-panel">{t('wd_loading')}</div> : !allocation ? <div className="workspace-panel allocation-locked"><ShieldCheck size={28}/><h2>{t('wd_locked_title')}</h2><p>{t('wd_locked_text')}</p><Link to="/check" className="button button-primary">{t('nav_check')} <ArrowRight size={16}/></Link></div> : <>
       <section className="allocation-banner"><div><span className="allocation-overline">{t('wd_current')}</span><h2>{periodLabel(allocation.period, allocation.period_label || allocation.month) || t('wd_current_month')}</h2><p>{schemeLabel} · {t('ent_allocation_ready')}</p></div><span className="allocation-verified"><ShieldCheck size={16}/> {t('wd_verified_rules')}</span></section>
       <div className="allocation-items">{items.map((item,index)=>{const name=String(item.item||item.name||'Item').toLowerCase();const qty=Number(item.allocated_quantity??item.quantity??0);const withdrawn=withdrawals.filter((row)=>String(row.item||'').toLowerCase()===name&&row.status!=='cancelled').reduce((sum,row)=>sum+Number(row.quantity||0),0);return <article className="allocation-item-card" key={`${name}-${index}`}><span>{name.slice(0,1).toUpperCase()}</span><div><strong>{tItem(item.item||item.name)}</strong><small>{t('wd_allocated')}</small></div><div className="allocation-qty"><strong>{qty} {item.unit||'kg'}</strong><small>{t('wd_remaining', { n: `${Math.max(0,qty-withdrawn)} kg` })}</small></div><div className="allocation-progress"><i style={{width:`${qty ? Math.min(100,withdrawn/qty*100):0}%`}}/></div><small className="allocation-progress-caption">{t('wd_recorded_of', { done: withdrawn, total: qty, unit: item.unit||'kg' })}</small></article>})}</div>
-      <div className="workspace-columns withdrawal-columns"><form className="workspace-panel workspace-form" onSubmit={submit}><div className="workspace-panel-head"><div><h2>{t('wd_form_title')}</h2><p>{t('wd_form_text')}</p></div><PackageCheck size={21}/></div><label>{t('wd_item')}<select value={values.item} onChange={(e)=>setValues((v)=>({...v,item:e.target.value}))}>{items.map((item,index)=><option key={index} value={String(item.item||item.name).toLowerCase()}>{tItem(item.item||item.name)}</option>)}</select></label><label>{t('wd_qty')}<input type="number" min="0.01" step="0.01" max={remaining} value={values.quantity} onChange={(e)=>setValues((v)=>({...v,quantity:e.target.value}))} required placeholder={t('wd_qty_ph', { n: remaining })}/><small className="field-note">{t('wd_available', { n: remaining })}</small></label><label>{t('wd_date')}<input type="date" value={values.date} onChange={(e)=>setValues((v)=>({...v,date:e.target.value}))} required/></label><label>{t('wd_ref')}<input value={values.reference} onChange={(e)=>setValues((v)=>({...v,reference:e.target.value}))} placeholder={t('wd_ref_ph')}/></label><button className="button button-primary" type="submit" disabled={busy||!items.length}>{busy?t('wd_submitting'):t('wd_submit')} <ArrowRight size={16}/></button></form>
+      <div className="workspace-columns withdrawal-columns"><form className="workspace-panel workspace-form" onSubmit={submit}><div className="workspace-panel-head"><div><h2>{t('wd_form_title')}</h2><p>{t('wd_form_text')}</p></div><PackageCheck size={21}/></div><label>{t('wd_item')}<select value={values.item} onChange={(e)=>setValues((v)=>({...v,item:e.target.value}))}>{items.map((item,index)=><option key={index} value={String(item.item||item.name).toLowerCase()}>{tItem(item.item||item.name)}</option>)}</select></label><label>{t('wd_qty')}<input type="number" min="0.01" step="0.01" max={remaining} value={values.quantity} onChange={(e)=>setValues((v)=>({...v,quantity:e.target.value}))} required placeholder={t('wd_qty_ph', { n: remaining })}/><small className="field-note">{t('wd_available', { n: remaining })}</small></label><label>{t('wd_date')}<input type="date" value={values.date} onChange={(e)=>setValues((v)=>({...v,date:e.target.value}))} required/></label><label>{t('wd_ref')}<input value={values.reference} onChange={(e)=>setValues((v)=>({...v,reference:e.target.value}))} placeholder={t('wd_ref_ph')}/></label><label>{t('wd_photo')}<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(e)=>setPhoto(e.target.files?.[0]||null)}/><small className="field-note">{t('wd_photo_note')}</small></label><button className="button button-primary" type="submit" disabled={busy||!items.length}>{busy?t('wd_submitting'):t('wd_submit')} <ArrowRight size={16}/></button></form>
       <aside className="workspace-panel receipt-side-panel"><FileCheck2 size={25}/><h2>{t('wd_side_title')}</h2><p>{t('wd_side_text')}</p><div className="receipt-rule"><CheckCircle2 size={16}/><span>{t('wd_side_rule1')}</span></div><div className="receipt-rule"><ShieldCheck size={16}/><span>{t('wd_side_rule2')}</span></div></aside></div>
-      <section className="workspace-panel withdrawal-history"><div className="workspace-panel-head"><div><h2>{t('wd_history')}</h2><p>{t('wd_history_text')}</p></div><button type="button" className="button button-secondary" onClick={load}><RefreshCw size={15}/> {t('wd_refresh')}</button></div>{withdrawals.length===0?<div className="workspace-empty"><ClipboardCheck size={25}/><strong>{t('wd_none')}</strong><p>{t('wd_none_text')}</p></div>:<div className="workspace-record-list">{withdrawals.map((row,index)=><article className="workspace-record-row" key={row.id||row.receipt_id||index}><span className="workspace-record-icon rice">{String(row.item||'R')[0].toUpperCase()}</span><div className="workspace-record-main"><strong>{tItem(row.item)} · {row.quantity} {row.unit||'kg'}</strong><span>{row.withdrawal_date||row.date} · {t('wd_receipt')} {row.receipt_id||row.reference||t('wd_pending')}</span></div><span className="workspace-record-status"><CheckCircle2 size={14}/>{t('wd_recorded')}</span>{row.id&&<a className="receipt-download-link" href={`/api/withdrawals/${row.id}/receipt.pdf`} download aria-label={t('wd_download_aria')} title={t('wd_download')}><Download size={16}/></a>}</article>)}</div>}</section>
+      <section className="workspace-panel withdrawal-history"><div className="workspace-panel-head"><div><h2>{t('wd_history')}</h2><p>{t('wd_history_text')}</p></div><button type="button" className="button button-secondary" onClick={load}><RefreshCw size={15}/> {t('wd_refresh')}</button></div>{withdrawals.length===0?<div className="workspace-empty"><ClipboardCheck size={25}/><strong>{t('wd_none')}</strong><p>{t('wd_none_text')}</p></div>:<div className="workspace-record-list">{withdrawals.map((row,index)=><article className="workspace-record-row" key={row.id||row.receipt_id||index}><span className="workspace-record-icon rice">{String(row.item||'R')[0].toUpperCase()}</span><div className="workspace-record-main"><strong>{tItem(row.item)} · {row.quantity} {row.unit||'kg'}</strong><span>{row.withdrawal_date||row.date} · {t('wd_receipt')} {row.receipt_id||row.reference||t('wd_pending')}</span></div><span className={`proof-chip ${row.proof_status||'none'}`}>{proofLabel(row.proof_status)}</span>{row.id&&row.proof_status!=='verified'&&<label className="proof-attach">{proofBusy===row.id?t('wd_proof_checking'):t('wd_proof_attach')}<input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" disabled={proofBusy===row.id} onChange={(e)=>{attachLater(row.id,e.target.files?.[0]);e.target.value=''}}/></label>}{row.id&&<a className="receipt-download-link" href={`/api/withdrawals/${row.id}/receipt.pdf`} download aria-label={t('wd_download_aria')} title={t('wd_download')}><Download size={16}/></a>}</article>)}</div>}</section>
     </>}
 
-    {success && <div className="receipt-modal-backdrop"><section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-created-title"><span className="receipt-success-icon"><CheckCircle2 size={27}/></span><h2 id="receipt-created-title">{t('wd_modal_title')}</h2><p>{t('wd_modal_text')}</p><div className="receipt-number"><small>{t('wd_modal_ref')}</small><strong>{success.receipt_id||success.reference||success.id}</strong></div>{(success.verification_code||success.verification_url)&&<div className="receipt-number"><small>{t('wd_modal_verify')}</small><strong>{success.verification_code||success.verification_url}</strong></div>}{success.id&&<a className="button button-secondary" href={`/api/withdrawals/${success.id}/receipt.pdf`} download><Download size={15}/> {t('wd_download')}</a>}<button className="button button-primary" type="button" onClick={()=>setSuccess(null)}>{t('wd_done')}</button></section></div>}
+    {success && <div className="receipt-modal-backdrop"><section className="receipt-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-created-title"><span className="receipt-success-icon"><CheckCircle2 size={27}/></span><h2 id="receipt-created-title">{t('wd_modal_title')}</h2><p>{t('wd_modal_text')}</p><div className="receipt-number"><small>{t('wd_modal_ref')}</small><strong>{success.receipt_id||success.reference||success.id}</strong></div>{(success.verification_code||success.verification_url)&&<div className="receipt-number"><small>{t('wd_modal_verify')}</small><strong>{success.verification_code||success.verification_url}</strong></div>}<div className={`receipt-number proof-result ${success.proof?.status||'none'}`}><small>{t('wd_proof_title')}</small><strong>{proofLabel(success.proof?.status)}</strong>{success.proof&&<small>{proofReason(success.proof)}</small>}</div>{success.id&&<a className="button button-secondary" href={`/api/withdrawals/${success.id}/receipt.pdf`} download><Download size={15}/> {t('wd_download')}</a>}<button className="button button-primary" type="button" onClick={()=>setSuccess(null)}>{t('wd_done')}</button></section></div>}
 
     <section className="workspace-panel receipt-verify-panel"><div><h2>{t('wd_verify_title')}</h2><p>{t('wd_verify_text')}</p></div><form onSubmit={verifyReceipt}><input value={verifyCode} onChange={(e)=>setVerifyCode(e.target.value)} required placeholder={t('wd_verify_ph')} aria-label={t('wd_verify_ph')}/><button className="button button-secondary" type="submit" disabled={verifying}>{verifying?t('wd_verifying'):t('wd_verify_btn')}</button></form>{verification&&<div className={`receipt-verification-result ${verification.valid===false?'invalid':'valid'}`} role="status"><ShieldCheck size={18}/><div><strong>{verification.valid===false?t('wd_verify_bad'):t('wd_verify_ok')}</strong><p>{verification.valid===false?t('wd_verify_notfound'):`${tItem(verification.item||'')} ${verification.quantity||''} kg · ${verification.withdrawal_date||''} · ${verification.receipt_id||''}`}</p></div></div>}</section>
   </main>

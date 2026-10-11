@@ -972,3 +972,15 @@ h1, h2, h3, p { margin-top: 0; }
 .receipt-download-link:hover { background:#d9eddd; }
 .shops-map { height:420px; margin-bottom:16px; border:1px solid #e7ece7; border-radius:16px; overflow:hidden; z-index:0; }
 @media(max-width:720px) { .shops-map { height:320px; } }
+
+/* receipt-photo proof on withdrawals */
+.proof-chip { padding:4px 9px; border-radius:99px; font-size:10px; font-weight:800; white-space:nowrap; background:#eef1ee; color:#6b786e; }
+.proof-chip.verified { background:#e3f3e7; color:#1f6b45; }
+.proof-chip.mismatch { background:#fdebe7; color:#a84b3d; }
+.proof-chip.unreadable { background:#fff3dc; color:#8a5a00; }
+.proof-attach { position:relative; display:inline-flex; align-items:center; padding:5px 10px; border:1px dashed #b9c9bc; border-radius:9px; color:#337a49; font-size:10px; font-weight:800; cursor:pointer; white-space:nowrap; }
+.proof-attach input { position:absolute; inset:0; opacity:0; cursor:pointer; }
+.proof-result.verified strong { color:#1f6b45; }
+.proof-result.mismatch strong { color:#a84b3d; }
+.proof-result.unreadable strong { color:#8a5a00; }
+.proof-result small:last-child { display:block; margin-top:4px; text-transform:none; letter-spacing:0; }

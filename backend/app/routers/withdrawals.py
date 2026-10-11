@@ -1,22 +1,27 @@
 """Withdrawals against the month's allocation, server-made receipts, and public receipt check.
 The balance is allocation minus recorded withdrawals, in exact integer grams."""
+import hashlib
 import re
 import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import rate_limit as rl
 from app.auth.deps import current_user
 from app.db import models as m
+from app.auth.sessions import now
 from app.db import mapping
 from app.db.session import get_db
 from app.documents import pdf
 from app.engine.units import UnitError, from_base, to_base
 from app.routers.entitlements import _IST
+from app.proof import receipt_check
+from app.proof.vision import VisionUnavailable, read_receipt
+from app.routers.household import MAX_PROOF_BYTES, _sniff
 from app.schemas import WithdrawalIn
 
 router = APIRouter(prefix="/api")
@@ -29,8 +34,8 @@ def _code(n: int) -> str:
     return "".join(secrets.choice(_SAFE) for _ in range(n))
 
 
-def _row_out(w: m.Withdrawal) -> dict:
-    return {"id": str(w.id), "item": w.item, "quantity": from_base(w.qty_base, "kg"), "unit": "kg",
+def _row_out(w: m.Withdrawal, proof: m.WithdrawalProof | None = None) -> dict:
+    return {"proof_status": proof.status if proof else "none", "id": str(w.id), "item": w.item, "quantity": from_base(w.qty_base, "kg"), "unit": "kg",
             "withdrawal_date": w.withdrawal_date.isoformat(), "receipt_id": w.receipt_id,
             "reference": w.reference, "status": w.status}
 
@@ -50,7 +55,9 @@ def list_withdrawals(month: str | None = Query(None), user: m.User = Depends(cur
         raise HTTPException(422, "VALIDATION_FAILED")
     rows = db.query(m.Withdrawal).filter_by(user_id=user.id, period=month).order_by(
         m.Withdrawal.withdrawal_date, m.Withdrawal.created_at).all()
-    return {"items": [_row_out(w) for w in rows]}
+    proofs = {p.withdrawal_id: p for p in db.query(m.WithdrawalProof).filter(
+        m.WithdrawalProof.withdrawal_id.in_([w.id for w in rows])).all()} if rows else {}
+    return {"items": [_row_out(w, proofs.get(w.id)) for w in rows]}
 
 
 @router.post("/withdrawals", status_code=201)
@@ -92,12 +99,60 @@ def receipt_pdf(withdrawal_id: str, user: m.User = Depends(current_user),
     if w is None or w.user_id != user.id:
         raise HTTPException(404, "NOT_FOUND")
     h = db.get(m.Household, user.id)
-    data = pdf.receipt_pdf({**_row_out(w), "verification_code": w.verification_code},
+    proof = db.get(m.WithdrawalProof, w.id)
+    data = pdf.receipt_pdf({**_row_out(w, proof), "verification_code": w.verification_code},
                            {"head_name": h.head_name if h else "-",
                             "state": h.state if h else "-", "district": h.district if h else "-"})
     return Response(data, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="receipt-{w.receipt_id}.pdf"',
         "Cache-Control": "no-store"})
+
+
+@router.post("/withdrawals/{withdrawal_id}/proof")
+async def upload_receipt_proof(withdrawal_id: str, file: UploadFile = File(...),
+                               user: m.User = Depends(current_user), db: Session = Depends(get_db)):
+    """A photo of the shop receipt, checked against what was recorded. The photo is not kept."""
+    wid = mapping.parse_id(withdrawal_id)
+    w = db.get(m.Withdrawal, wid) if wid else None
+    if w is None or w.user_id != user.id:
+        raise HTTPException(404, "NOT_FOUND")
+    wait = rl.receipt_proof_limiter.hit(str(user.id))
+    if wait:
+        raise rl.too_many(wait)
+    data = await file.read(MAX_PROOF_BYTES + 1)
+    if not data:
+        raise HTTPException(422, "FILE_EMPTY")
+    if len(data) > MAX_PROOF_BYTES:
+        raise HTTPException(413, "PAYLOAD_TOO_LARGE")
+    mime = _sniff(data)
+    if mime is None:
+        raise HTTPException(422, "FILE_TYPE_NOT_ALLOWED")
+    digest = hashlib.sha256(data).hexdigest()
+    reused = db.query(m.WithdrawalProof).filter(
+        m.WithdrawalProof.sha256 == digest, m.WithdrawalProof.withdrawal_id != w.id).first() is not None
+
+    if mime == "application/pdf":
+        status, result = "unreadable", {"checked_by": "none", "reason": "PDF_NOT_READ", "checks": {}}
+    else:
+        try:
+            status, result = receipt_check.decide(
+                read_receipt(data, mime), item=w.item, qty_base=w.qty_base, on=w.withdrawal_date,
+                reference=w.reference)
+        except VisionUnavailable:
+            status, result = "unreadable", {"checked_by": "none", "reason": "AI_UNAVAILABLE", "checks": {}}
+    if reused and status == "verified":       # the same photo cannot prove two different withdrawals
+        status, result = "unreadable", {**result, "reason": "PHOTO_ALREADY_USED"}
+
+    proof = db.get(m.WithdrawalProof, w.id)
+    if proof is None:
+        proof = m.WithdrawalProof(withdrawal_id=w.id, status=status, result=result, sha256=digest,
+                                  updated_at=now())
+        db.add(proof)
+    else:
+        proof.status, proof.result, proof.sha256, proof.updated_at = status, result, digest, now()
+    db.commit()
+    return {"proof": {"status": status, "reason": result.get("reason"), "checks": result.get("checks", {})},
+            "withdrawal": _row_out(w, proof)}
 
 
 def _limit_verify(request: Request) -> None:
@@ -114,7 +169,8 @@ def verify_receipt(code: str, db: Session = Depends(get_db)):
                                       (m.Withdrawal.verification_code == code)).first()
     if w is None:
         return {"valid": False, "message": "No receipt was issued with this reference or code."}
-    return {"valid": True, "status": w.status, "item": w.item,
+    proof = db.get(m.WithdrawalProof, w.id)
+    return {"valid": True, "status": w.status, "proof_status": proof.status if proof else "none", "item": w.item,
             "quantity": from_base(w.qty_base, "kg"), "unit": "kg",
             "withdrawal_date": w.withdrawal_date.isoformat(), "receipt_id": w.receipt_id,
             "message": f"Receipt {w.receipt_id} is valid: {w.item} "
