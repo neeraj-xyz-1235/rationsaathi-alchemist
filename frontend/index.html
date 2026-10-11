@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RationSaathi - deployment test</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 16px; color: #1a1a1a; }
+  h1 { color: #176B45; font-size: 1.4rem; margin-bottom: 4px; }
+  h2 { font-size: 1.05rem; margin: 20px 0 8px; }
+  .muted { color: #666; font-size: 0.9rem; }
+  button { background: #176B45; color: #fff; border: 0; padding: 8px 14px; border-radius: 6px; cursor: pointer; margin: 0 6px 6px 0; font-size: 0.95rem; }
+  button.alt { background: #E9A23B; color: #1a1a1a; }
+  input { padding: 7px; margin: 0 6px 6px 0; border: 1px solid #bbb; border-radius: 6px; width: 220px; max-width: 100%; }
+  pre { background: #f4f4f4; padding: 10px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 360px; }
+  table { border-collapse: collapse; width: 100%; }
+  td { border-bottom: 1px solid #ddd; padding: 6px 4px; font-size: 0.95rem; }
+  .ok { color: #176B45; font-weight: 600; }
+  .fail { color: #b00020; font-weight: 600; }
+  .wait { color: #888; }
+</style>
+</head>
+<body>
+
+<h1>RationSaathi - deployment test</h1>
+<p class="muted">If you can read this, the frontend is deployed. The buttons below call the backend through <code>/api</code> on this same domain.</p>
+<p class="muted">This page's origin: <code id="origin"></code><br>
+(Set <code>APP_ORIGIN</code> on the backend to exactly this value.)</p>
+
+<h2>1. Run all checks</h2>
+<button onclick="runAll()">Run all checks</button>
+<span class="muted">Uses one signup (limit: 5 per hour per IP).</span>
+<table id="summary"></table>
+
+<h2>2. Single calls</h2>
+<button onclick="call('GET','/api/health')">GET /api/health</button>
+<button onclick="call('GET','/api/auth/me')">GET /api/auth/me</button>
+<button onclick="call('POST','/api/auth/logout')">POST /api/auth/logout</button>
+<button class="alt" onclick="calcDemo()">POST /api/calculate (demo)</button>
+
+<h2>3. Login / signup</h2>
+<input id="email" placeholder="email" value="demo@rationsaathi.test">
+<input id="password" type="password" placeholder="password (10+ chars)">
+<br>
+<button onclick="authCall('login')">Login</button>
+<button onclick="authCall('signup')">Signup</button>
+
+<h2>Response</h2>
+<pre id="out">Nothing called yet.</pre>
+
+<script>
+document.getElementById('origin').textContent = location.origin;
+const out = document.getElementById('out');
+
+async function api(method, path, body) {
+  const opts = { method, headers: {}, credentials: 'same-origin' };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const started = performance.now();
+  try {
+    const res = await fetch(path, opts);
+    const text = await res.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    return { status: res.status, ms: Math.round(performance.now() - started), data };
+  } catch (e) {
+    return { status: 0, ms: Math.round(performance.now() - started), data: String(e) };
+  }
+}
+
+function show(method, path, r) {
+  out.textContent = method + ' ' + path + '\nStatus: ' + r.status + '  (' + r.ms + ' ms)\n\n' +
+    (typeof r.data === 'string' ? r.data : JSON.stringify(r.data, null, 2));
+}
+
+async function call(method, path, body) {
+  out.textContent = 'Calling ' + path + ' ... (a sleeping free backend can take about a minute)';
+  const r = await api(method, path, body);
+  show(method, path, r);
+  return r;
+}
+
+const DEMO_CASE = {
+  household_ref: null,
+  members: 4,
+  period: { start: '2026-09-01', end: '2026-09-30' },
+  rules: [
+    { id: 'r-rice', item: 'Rice', basis: 'per_member', quantity: { value: '5', unit: 'kg' }, due_by: null },
+    { id: 'r-wheat', item: 'Wheat', basis: 'per_member', quantity: { value: '2.5', unit: 'kg' }, due_by: null }
+  ],
+  records: [
+    { id: 'd1', rule_id: 'r-rice', item: 'Rice', quantity: { value: '8', unit: 'kg' }, date: '2026-09-03',
+      status: 'confirmed', entry_method: 'manual',
+      evidence: { receipt_ref: '101', note: null, no_receipt: false, receipt_text: null } },
+    { id: 'd2', rule_id: 'r-rice', item: 'Rice', quantity: { value: '6', unit: 'kg' }, date: '2026-09-20',
+      status: 'confirmed', entry_method: 'manual',
+      evidence: { receipt_ref: '145', note: null, no_receipt: false, receipt_text: null } },
+    { id: 'd3', rule_id: 'r-wheat', item: 'Wheat', quantity: { value: '10', unit: 'kg' }, date: '2026-09-05',
+      status: 'confirmed', entry_method: 'manual',
+      evidence: { receipt_ref: null, note: 'Collected at shop', no_receipt: true, receipt_text: null } }
+  ]
+};
+
+function calcDemo() { return call('POST', '/api/calculate', DEMO_CASE); }
+
+function authCall(kind) {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  return call('POST', '/api/auth/' + kind, { email, password });
+}
+
+// ---- run all checks ----
+function row(name) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = '<td>' + name + '</td><td class="wait">waiting...</td>';
+  document.getElementById('summary').appendChild(tr);
+  return (ok, msg) => {
+    tr.cells[1].className = ok ? 'ok' : 'fail';
+    tr.cells[1].textContent = (ok ? 'PASS' : 'FAIL') + ' - ' + msg;
+  };
+}
+
+async function runAll() {
+  document.getElementById('summary').innerHTML = '';
+  out.textContent = 'Running checks ...';
+  let r;
+
+  const health = row('Backend reachable (/api/health)');
+  r = await api('GET', '/api/health');
+  health(r.status === 200, 'status ' + r.status + ', ' + r.ms + ' ms' +
+    (r.status === 404 ? ' (is the /api rewrite set in vercel.json?)' : ''));
+
+  const calc = row('Calculate demo (rice 20 expected, 14 received, 6 difference)');
+  r = await api('POST', '/api/calculate', DEMO_CASE);
+  try {
+    const rice = r.data.items[0];
+    const good = rice.expected.value === '20' && rice.received.value === '14' &&
+                 rice.difference.value === '6' && rice.labels[0].code === 'shortfall';
+    calc(good, good ? 'numbers match' : 'unexpected result: ' + JSON.stringify(rice.difference));
+  } catch { calc(false, 'status ' + r.status + ' ' + JSON.stringify(r.data).slice(0, 120)); }
+
+  const email = 'check' + Date.now() + '@example.com';
+  const password = 'test-pass-' + Math.random().toString(36).slice(2, 12);
+
+  const signup = row('Signup (origin check + cookie set)');
+  r = await api('POST', '/api/auth/signup', { email, password });
+  signup(r.status === 201, 'status ' + r.status +
+    (r.status === 403 ? ' BAD_ORIGIN: APP_ORIGIN must equal ' + location.origin : '') +
+    (r.status === 429 ? ' rate limited, try again later' : ''));
+
+  const me = row('Session cookie works (/api/auth/me)');
+  r = await api('GET', '/api/auth/me');
+  me(r.status === 200, 'status ' + r.status +
+    (r.status === 401 ? ' (cookie not sent: COOKIE_SECURE=true needs https; check the proxy)' : ''));
+
+  const logout = row('Logout');
+  r = await api('POST', '/api/auth/logout');
+  logout(r.status === 204, 'status ' + r.status);
+
+  const after = row('After logout, /api/auth/me is 401');
+  r = await api('GET', '/api/auth/me');
+  after(r.status === 401, 'status ' + r.status);
+
+  out.textContent = 'Done. Test account used: ' + email;
+}
+</script>
+</body>
+</html>

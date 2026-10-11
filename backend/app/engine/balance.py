@@ -1,14 +1,13 @@
-import pytest
-from app.engine.units import to_base, from_base, UnitError
+"""User-friendly view of the same difference (plan 3.5). Display only; never changes labels."""
+from .units import from_base
 
-def test_to_base():
-    assert to_base("2.5", "kg") == ("mass", 2500)
 
-def test_from_base():
-    assert from_base(2500, "kg") == "2.5"
-    assert from_base(0, "kg") == "0"
-    assert from_base(-2000, "kg") == "-2"
-
-def test_never_rounds():
-    with pytest.raises(UnitError):
-        to_base("1.2345", "kg")
+def balance(expected: int, received: int, unit: str, phase: str) -> dict:
+    # integer maths only; floored so 2.999 of 3 kg shows "99.9", never "100.0"
+    tenths = received * 1000 // expected if expected > 0 else 0
+    return {
+        "remaining": from_base(max(expected - received, 0), unit),
+        "over_by": from_base(max(received - expected, 0), unit),
+        "percent_used": f"{tenths // 10}.{tenths % 10}",
+        "phase": phase,
+    }

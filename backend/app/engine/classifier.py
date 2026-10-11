@@ -1,19 +1,26 @@
+"""Fixed-rule labels (plan 3.3). No AI. Each label carries a reason code and record ids."""
+
+
+def _label(code, reason, record_ids=None):
+    return {"code": code, "reason": reason, "record_ids": record_ids or []}
+
+
 def classify(expected, received, phase, excluded, late_ids, pending_ids):
     labels = []
     if received == expected:
-        labels.append({"code": "no_difference", "reason": "CONFIRMED_TOTAL_EQUALS_EXPECTED", "record_ids": []})
+        labels.append(_label("no_difference", "CONFIRMED_TOTAL_EQUALS_EXPECTED"))
     elif received > expected:
-        labels.append({"code": "above_expected", "reason": "CONFIRMED_TOTAL_ABOVE_EXPECTED", "record_ids": []})
+        labels.append(_label("above_expected", "CONFIRMED_TOTAL_ABOVE_EXPECTED"))
     elif phase == "ended":
-        labels.append({"code": "shortfall", "reason": "CONFIRMED_TOTAL_BELOW_EXPECTED", "record_ids": []})
+        labels.append(_label("shortfall", "CONFIRMED_TOTAL_BELOW_EXPECTED"))
     else:
-        labels.append({"code": "unclear", "reason": "PERIOD_NOT_ENDED", "record_ids": []})
+        labels.append(_label("unclear", "PERIOD_NOT_ENDED"))
     bad = [e["record_id"] for e in excluded
            if e["reason"] in ("MISSING_DATE", "OUTSIDE_PERIOD", "UNIT_MISMATCH")]
     if bad:
-        labels.append({"code": "unclear", "reason": "RECORDS_EXCLUDED", "record_ids": bad})
+        labels.append(_label("unclear", "RECORDS_EXCLUDED", bad))
     if late_ids:
-        labels.append({"code": "late", "reason": "RECORDED_AFTER_DUE_BY", "record_ids": late_ids})
+        labels.append(_label("late", "RECORDED_AFTER_DUE_BY", late_ids))
     if pending_ids:
-        labels.append({"code": "unrecorded", "reason": "PENDING_NOT_CONFIRMED", "record_ids": pending_ids})
+        labels.append(_label("unrecorded", "PENDING_NOT_CONFIRMED", pending_ids))
     return labels

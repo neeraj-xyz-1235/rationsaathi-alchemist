@@ -1,0 +1,27 @@
+{
+  "household_ref": null,
+  "members": 4,
+  "period": { "start": "2026-09-01", "end": "2026-09-30" },
+  "rules": [
+    { "id": "r-rice", "item": "Rice", "basis": "per_member",
+      "quantity": { "value": "5", "unit": "kg" }, "due_by": null },
+    { "id": "r-wheat", "item": "Wheat", "basis": "per_member",
+      "quantity": { "value": "2.5", "unit": "kg" }, "due_by": null }
+  ],
+  "records": [
+    { "id": "d1", "rule_id": "r-rice", "item": "Rice",
+      "quantity": { "value": "8", "unit": "kg" }, "date": "2026-09-03",
+      "status": "confirmed", "entry_method": "extracted_confirmed",
+      "evidence": { "receipt_ref": "101", "note": null, "no_receipt": false,
+                    "receipt_text": "Rice 8kg recvd 03/09 Rcpt#101" } },
+    { "id": "d2", "rule_id": "r-rice", "item": "Rice",
+      "quantity": { "value": "6", "unit": "kg" }, "date": "2026-09-20",
+      "status": "confirmed", "entry_method": "manual",
+      "evidence": { "receipt_ref": "145", "note": null, "no_receipt": false, "receipt_text": null } },
+    { "id": "d3", "rule_id": "r-wheat", "item": "Wheat",
+      "quantity": { "value": "10", "unit": "kg" }, "date": "2026-09-05",
+      "status": "confirmed", "entry_method": "manual",
+      "evidence": { "receipt_ref": null, "note": "Collected at shop", "no_receipt": true,
+                    "receipt_text": null } }
+  ]
+}
