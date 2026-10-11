@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ArrowRight, ClipboardList, FileChartColumnIncreasing, Info, MapPinned, PackageCheck, UsersRound, Wheat, Check } from 'lucide-react'
 import { useLang } from '../i18n/index.jsx'
 import ActionCard from '../components/ui/ActionCard.jsx'
@@ -33,7 +33,6 @@ function FamilyIllustration({ label }) {
 
 export default function Home({ onNavigate }) {
   const { t } = useLang()
-  const [showShopsInfo, setShowShopsInfo] = useState(false)
 
   return (
     <main id="home">
@@ -92,8 +91,8 @@ export default function Home({ onNavigate }) {
 
       <section className="shop-banner page-container" aria-label={t('shopTitle')}>
         <div className="shop-icon"><MapPinned size={25} strokeWidth={1.7} /></div>
-        <div className="shop-copy"><div className="shop-title-row"><h2>{t('shopTitle')}</h2><span className="coming-soon-chip">{t('comingSoon')}</span></div><p>{t('shopDescription')}</p></div>
-        <button type="button" className="button button-outline shop-learn" onClick={() => setShowShopsInfo(true)}>{t('learnMore')} <ArrowRight size={16}/></button>
+        <div className="shop-copy"><div className="shop-title-row"><h2>{t('shopTitle')}</h2></div><p>{t('shopDescription')}</p></div>
+        <Link to="/shops" className="button button-outline shop-learn">{t('shopOpen')} <ArrowRight size={16}/></Link>
       </section>
 
       <section className="notice-section page-container">
@@ -101,17 +100,6 @@ export default function Home({ onNavigate }) {
         <div><h2>{t('noteTitle')}</h2><p>{t('noteText')}</p></div>
       </section>
 
-      {showShopsInfo && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowShopsInfo(false) }}>
-          <section className="help-modal" role="dialog" aria-modal="true" aria-labelledby="shops-dialog-title">
-            <span className="modal-symbol"><MapPinned size={25}/></span>
-            <h2 id="shops-dialog-title">{t('shopTitle')}</h2>
-            <p>{t('shopDescription')}</p>
-            <p className="modal-muted">{t('shopFutureNote')}</p>
-            <button type="button" className="button button-primary" onClick={() => setShowShopsInfo(false)}>{t('close')}</button>
-          </section>
-        </div>
-      )}
     </main>
   )
 }

@@ -1,4 +1,11 @@
+import { workspace } from '../i18n/workspace.js'
+
 const jsonHeaders = { 'Content-Type': 'application/json' }
+function say(key) {
+  let lang = 'en'
+  try { lang = window.localStorage.getItem('rationsaathi.lang') || 'en' } catch { /* ignore */ }
+  return (workspace[lang] || workspace.en)[key] || workspace.en[key]
+}
 
 export class ApiError extends Error {
   constructor(message, { status, code, fields, retryAfter, payload } = {}) {
@@ -27,7 +34,7 @@ async function request(path, options = {}) {
     })
   } catch (error) {
     if (error.name === 'AbortError') throw error
-    throw new ApiError('Could not connect to the server. Please try again.')
+    throw new ApiError(say('err_generic'))
   }
 
   const contentType = response.headers.get('content-type') || ''
@@ -45,8 +52,8 @@ async function request(path, options = {}) {
     // A non-JSON body is a proxy/host error page (e.g. a 502 while the server restarts): never show it.
     const hostDown = response.status >= 502 && response.status <= 504
     const message = hostDown
-      ? 'The server is starting up or temporarily unavailable. Please wait a moment and try again.'
-      : error.message || payload?.detail || payload?.message || 'Request failed. Please try again.'
+      ? say('err_down')
+      : error.message || payload?.detail || payload?.message || say('err_generic')
     throw new ApiError(message, {
       status: response.status,
       code: error.code || payload?.code,
