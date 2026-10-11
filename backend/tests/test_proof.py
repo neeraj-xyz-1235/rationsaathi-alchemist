@@ -31,8 +31,9 @@ def test_matching_card_is_verified():
     assert res["checks"]["category"] == "match"
 
 
-def test_not_a_card_is_rejected():
-    assert decide(card(is_ration_card=False))[0] == "rejected"
+def test_not_a_card_is_never_rejected():
+    status, res = decide(card(is_ration_card=False))
+    assert status == "needs_review" and res["reason"] == "NOT_A_RATION_CARD"
 
 
 def test_name_mismatch_needs_review():
@@ -118,9 +119,11 @@ def test_png_accepted(user, monkeypatch):
     assert upload(user, PNG, "c.png", "image/png").json()["profile"]["proof_status"] == "verified"
 
 
-def test_not_a_card_rejected(user, monkeypatch):
+def test_not_a_card_goes_to_review(user, monkeypatch):
     fake_ai(monkeypatch, card(is_ration_card=False))
-    assert upload(user).json()["profile"]["proof_status"] == "rejected"
+    p = upload(user).json()["profile"]
+    assert p["proof_status"] == "needs_review"
+    assert p["proof_result"]["reason"] == "NOT_A_RATION_CARD"
 
 
 def test_ai_down_goes_to_review(user, monkeypatch):

@@ -3,7 +3,9 @@
 verified      : it is a ration card AND the name and state match what the household entered,
                 and nothing on the card contradicts the entered category / last-4.
 needs_review  : unreadable, no AI available, or something does not match (a person should look).
-rejected      : the image is not a ration card at all."""
+
+Nothing is rejected for now: a model's "this is not a ration card" is only a hint, so it goes to
+review with the reason NOT_A_RATION_CARD instead of being refused."""
 import re
 import unicodedata
 from difflib import SequenceMatcher
@@ -53,7 +55,7 @@ def decide(t: Transcription, *, head_name: str, state: str, card_type: str,
            last4: str | None) -> tuple[str, dict]:
     """Returns (proof_status, result). `result` holds only codes, never the card contents."""
     if not t.is_ration_card:
-        return "rejected", {"checked_by": "ai", "reason": "NOT_A_RATION_CARD", "checks": {}}
+        return "needs_review", {"checked_by": "ai", "reason": "NOT_A_RATION_CARD", "checks": {}}
 
     checks: dict[str, str] = {}
     checks["name"] = ("unreadable" if not t.head_name else
