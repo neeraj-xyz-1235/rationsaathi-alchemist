@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, date
 from sqlalchemy import (
-    Uuid, JSON, Date, BigInteger, Integer, Text, Boolean, DateTime,
+    Uuid, JSON, Float, Date, BigInteger, Integer, Text, Boolean, DateTime,
     ForeignKey, ForeignKeyConstraint, CheckConstraint, Index, func, false,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -244,3 +244,18 @@ class Withdrawal(Base):
         CheckConstraint("status IN ('recorded','cancelled')", name="ck_withdrawal_status"),
         Index("withdrawals_user_period_idx", "user_id", "period"),
     )
+
+
+class SavedShop(Base):
+    """A ration shop the user pinned themselves (OpenStreetMap has very few). Private to them."""
+    __tablename__ = "saved_shops"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lon: Mapped[float] = mapped_column(Float, nullable=False)
+    address: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(TS, server_default=func.now())
+    __table_args__ = (Index("saved_shops_user_idx", "user_id"),)

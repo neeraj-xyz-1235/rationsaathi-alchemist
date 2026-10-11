@@ -42,7 +42,11 @@ async function request(path, options = {}) {
       window.dispatchEvent(new CustomEvent('rationsaathi:unauthorized', { detail: { path } }))
     }
     const error = payload?.error || {}
-    const message = error.message || payload?.detail || payload?.message || (typeof payload === 'string' ? payload : '') || 'Request failed. Please try again.'
+    // A non-JSON body is a proxy/host error page (e.g. a 502 while the server restarts): never show it.
+    const hostDown = response.status >= 502 && response.status <= 504
+    const message = hostDown
+      ? 'The server is starting up or temporarily unavailable. Please wait a moment and try again.'
+      : error.message || payload?.detail || payload?.message || 'Request failed. Please try again.'
     throw new ApiError(message, {
       status: response.status,
       code: error.code || payload?.code,

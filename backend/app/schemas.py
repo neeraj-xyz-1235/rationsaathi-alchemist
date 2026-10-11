@@ -457,3 +457,25 @@ class WithdrawalIn(Strict):
 
 class MonthlyReportEmail(Strict):
     month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+class SavedShopIn(Strict):
+    name: str = Field(min_length=1, max_length=100)
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    address: str | None = Field(None, max_length=200)
+    phone: str | None = Field(None, max_length=30)
+
+    @field_validator("name")
+    @classmethod
+    def _name_required(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("REQUIRED")
+        return v
+
+    @field_validator("address", "phone")
+    @classmethod
+    def _blank_is_none(cls, v):
+        v = (v or "").strip()
+        return v or None
